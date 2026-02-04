@@ -1,4 +1,11 @@
-export const SHEET_ID = '10fV3t209PCrTCfk1ckISUsyI8GwEVG6R77161wkpuNM';
+export const SHEET_ID = process.env.NEXT_PUBLIC_SHEET_ID;
+
+function requireSheetId(): string {
+  if (!SHEET_ID) {
+    throw new Error('Missing NEXT_PUBLIC_SHEET_ID. Configure it in your environment.');
+  }
+  return SHEET_ID;
+}
 
 export type SheetState = {
   rows: SheetRow[];
@@ -89,9 +96,32 @@ export function inferColumn(name: string): string | null {
   return match ? match[0] : null;
 }
 
-export async function fetchSheetData(gid: string): Promise<FetchResult> {
+export type SheetTab = {
+  title: string;
+};
+
+export async function fetchSheetTabs(): Promise<SheetTab[]> {
+  const sheetId = requireSheetId();
+  const url = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/full?alt=json`;
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Unable to list sheet tabs (HTTP ${response.status}).`);
+  }
+  const data = (await response.json()) as {
+    feed?: { entry?: Array<{ title?: { $t?: string } }> };
+  };
+  const entries = data.feed?.entry ?? [];
+  return entries
+    .map((entry) => entry.title?.$t)
+    .filter((title): title is string => Boolean(title))
+    .map((title) => ({ title }));
+}
+
+export async function fetchSheetData(sheetName: string): Promise<FetchResult> {
+  const sheetId = requireSheetId();
   const query = encodeURIComponent('select *');
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${gid}&tq=${query}`;
+  const sheetParam = encodeURIComponent(sheetName);
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?sheet=${sheetParam}&tq=${query}`;
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Unable to reach the sheet (HTTP ${response.status}).`);
@@ -107,11 +137,33 @@ export async function fetchSheetData(gid: string): Promise<FetchResult> {
     table?: { cols: Array<{ label: string; id: string; type: string }>; rows: Array<{ c: Array<{ v: string | number | null } | null> }> };
   };
   if (!data.table?.rows?.length) {
-    throw new Error('No rows returned. Confirm the GID points to a populated tab.');
+    throw new Error('No rows returned. Confirm the tab is populated.');
   }
   const columns = data.table.cols.map((col) => col.label || col.id);
   const rows = data.table.rows.map((row) => row.c.map((cell) => (cell ? cell.v : null)));
   return { columns, rows, types: data.table.cols.map((col) => col.type) };
+}
+
+export function mergeFetchResults(results: FetchResult[]): FetchResult {
+  if (!results.length) {
+    throw new Error('No tabs returned from the sheet.');
+  }
+  const [first, ...rest] = results;
+  const rows = rest.reduce((acc, current) => acc.concat(current.rows), [...first.rows]);
+  return {
+    columns: first.columns,
+    rows,
+    types: first.types
+  };
+}
+
+export async function fetchAllSheetData(): Promise<FetchResult> {
+  const tabs = await fetchSheetTabs();
+  if (!tabs.length) {
+    throw new Error('No tabs found in the sheet.');
+  }
+  const results = await Promise.all(tabs.map((tab) => fetchSheetData(tab.title)));
+  return mergeFetchResults(results);
 }
 
 export function buildState(result: FetchResult): SheetState {

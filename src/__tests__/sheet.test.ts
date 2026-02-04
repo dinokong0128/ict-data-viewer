@@ -6,6 +6,7 @@ import {
   formatDate,
   groupByDate,
   inferColumn,
+  mergeFetchResults,
   normalize,
   parseErrors,
   parseGvizDate
@@ -53,5 +54,17 @@ describe('sheet helpers', () => {
     const state = buildState(sampleResult);
     const result = buildErrorCounts(state.rows);
     expect(result.errors).toEqual(['E1', 'E2']);
+  });
+
+  it('merges fetch results', () => {
+    const merged = mergeFetchResults([
+      sampleResult,
+      {
+        columns: sampleResult.columns,
+        rows: [['2024-05-03', 'A3', 'T2', '0', 'pass']],
+        types: sampleResult.types
+      }
+    ]);
+    expect(merged.rows).toHaveLength(3);
   });
 });

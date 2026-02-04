@@ -15,11 +15,15 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
    ```bash
    npm install
    ```
-2. Run the dev server:
+2. Set the Google Sheet ID in an environment variable:
+   ```bash
+   export NEXT_PUBLIC_SHEET_ID="your-sheet-id"
+   ```
+3. Run the dev server:
    ```bash
    npm run dev
    ```
-3. Open `http://localhost:3000` and use the GID field to switch tabs.
+4. Open `http://localhost:3000` and the dashboard will load all tabs in the sheet.
 
 ## Tests & linting
 
@@ -34,4 +38,8 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
 
 ## Troubleshooting
 
-If the UI reports “Not found” or “Unable to load data,” confirm the Google Sheet is shared with **Anyone with the link** and that the Sheet GID matches the tab you want to view.
+If the UI reports “Not found” or “Unable to load data,” confirm the Google Sheet is shared with **Anyone with the link** and that `NEXT_PUBLIC_SHEET_ID` is set correctly.
+
+## Vercel config
+
+Add `NEXT_PUBLIC_SHEET_ID` as an environment variable in your Vercel project settings.
