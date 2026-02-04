@@ -27,7 +27,7 @@ export function ChartPanel({ labels, datasets, chartType, onSelectDate }: ChartP
         return;
       }
 
-      const module = await import('chart.js/auto');
+      const mod = await import('chart.js/auto');
       if (!isMounted) {
         return;
       }
@@ -36,7 +36,7 @@ export function ChartPanel({ labels, datasets, chartType, onSelectDate }: ChartP
         chartRef.current.destroy();
       }
 
-      const ChartConstructor = module.default;
+      const ChartConstructor = mod.default;
       chartRef.current = new ChartConstructor(canvasRef.current, {
         type: chartType,
         data: {
