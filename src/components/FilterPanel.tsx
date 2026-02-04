@@ -1,8 +1,6 @@
 import React from 'react';
 
 type FilterPanelProps = {
-  gid: string;
-  onGidChange: (value: string) => void;
   onReload: () => void;
   rangePreset: string;
   onRangePresetChange: (value: string) => void;
@@ -21,8 +19,6 @@ type FilterPanelProps = {
 };
 
 export function FilterPanel({
-  gid,
-  onGidChange,
   onReload,
   rangePreset,
   onRangePresetChange,
@@ -42,16 +38,11 @@ export function FilterPanel({
   return (
     <section className="section controls">
       <div className="card control-card">
-        <label htmlFor="sheet-gid">Sheet GID</label>
-        <input
-          id="sheet-gid"
-          type="text"
-          value={gid}
-          onChange={(event) => onGidChange(event.target.value)}
-        />
-        <button type="button" onClick={onReload} style={{ marginTop: 8 }}>
+        <label>Data source</label>
+        <button type="button" onClick={onReload}>
           Reload data
         </button>
+        <p style={{ margin: '8px 0 0', color: '#6b7280' }}>Loading all tabs in the sheet.</p>
       </div>
       <div className="card control-card">
         <label htmlFor="range-select">Date range</label>
@@ -65,24 +56,26 @@ export function FilterPanel({
           <option value="30">Past 30 days</option>
           <option value="custom">Custom</option>
         </select>
-        <div className="custom-range">
-          <label>
-            Start
-            <input
-              type="date"
-              value={startDate}
-              onChange={(event) => onStartDateChange(event.target.value)}
-            />
-          </label>
-          <label>
-            End
-            <input
-              type="date"
-              value={endDate}
-              onChange={(event) => onEndDateChange(event.target.value)}
-            />
-          </label>
-        </div>
+        {rangePreset === 'custom' ? (
+          <div className="custom-range">
+            <label>
+              Start
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => onStartDateChange(event.target.value)}
+              />
+            </label>
+            <label>
+              End
+              <input
+                type="date"
+                value={endDate}
+                onChange={(event) => onEndDateChange(event.target.value)}
+              />
+            </label>
+          </div>
+        ) : null}
       </div>
       <div className="card control-card">
         <label htmlFor="metric-select">Metric</label>

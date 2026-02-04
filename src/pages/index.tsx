@@ -7,18 +7,14 @@ import {
   buildErrorCounts,
   buildState,
   buildSummary,
-  fetchSheetData,
+  fetchAllSheetData,
   filterRowsByRange,
   formatDate,
   getCategoryOptions,
-  getRangeBounds,
   groupByDate,
-  SHEET_ID,
   type SheetRow,
   type SheetState
 } from '@/lib/sheet';
-
-const DEFAULT_GID = '1147914701';
 const PAGE_SIZE = 12;
 
 type ChartConfig = {
@@ -28,10 +24,9 @@ type ChartConfig = {
 };
 
 export default function HomePage() {
-  const [gid, setGid] = useState(DEFAULT_GID);
   const [sheetState, setSheetState] = useState<SheetState | null>(null);
   const [status, setStatus] = useState<string | null>('Loading data...');
-  const [rangePreset, setRangePreset] = useState('30');
+  const [rangePreset, setRangePreset] = useState('7');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [metric, setMetric] = useState('boards');
@@ -43,7 +38,7 @@ export default function HomePage() {
   const loadData = useCallback(async () => {
     try {
       setStatus('Loading data...');
-      const result = await fetchSheetData(gid.trim() || DEFAULT_GID);
+      const result = await fetchAllSheetData();
       const nextState = buildState(result);
       setSheetState(nextState);
       setStatus(null);
@@ -51,26 +46,22 @@ export default function HomePage() {
       setStatus(error instanceof Error ? error.message : 'Unable to load data.');
       setSheetState(null);
     }
-  }, [gid]);
+  }, []);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
   useEffect(() => {
-    if (!sheetState) {
-      return;
-    }
-    const { minDate, maxDate } = getRangeBounds(sheetState.rows);
     const rangeDays = Number(rangePreset);
-    if (!Number.isNaN(rangeDays)) {
-      const start = new Date(maxDate);
+    if (!Number.isNaN(rangeDays) && rangePreset !== 'custom') {
+      const today = new Date();
+      const start = new Date(today);
       start.setDate(start.getDate() - (rangeDays - 1));
-      const boundedStart = start < minDate ? minDate : start;
-      setStartDate(formatDate(boundedStart));
-      setEndDate(formatDate(maxDate));
+      setStartDate(formatDate(start));
+      setEndDate(formatDate(today));
     }
-  }, [rangePreset, sheetState]);
+  }, [rangePreset]);
 
   const activeRange = useMemo(() => {
     if (!startDate || !endDate) {
@@ -239,21 +230,13 @@ export default function HomePage() {
           <h1>ICT Data Viewer</h1>
           <p>Visualize tester output from the Google Sheet without downloading data locally.</p>
         </div>
-        <div>
-          <strong>Sheet:</strong> {SHEET_ID}
-        </div>
       </header>
 
       <FilterPanel
-        gid={gid}
-        onGidChange={setGid}
         onReload={loadData}
         rangePreset={rangePreset}
         onRangePresetChange={(value) => {
           setRangePreset(value);
-          if (value === 'custom') {
-            return;
-          }
         }}
         startDate={startDate}
         endDate={endDate}

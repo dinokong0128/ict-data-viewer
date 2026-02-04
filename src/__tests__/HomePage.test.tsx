@@ -13,7 +13,7 @@ jest.mock('@/lib/sheet', () => {
   const actual = jest.requireActual('@/lib/sheet');
   return {
     ...actual,
-    fetchSheetData: jest.fn().mockResolvedValue({
+    fetchAllSheetData: jest.fn().mockResolvedValue({
       columns: ['Date', 'SN', 'Tester', 'Other', 'Last_time'],
       rows: [['2024-05-01', 'A1', 'T1', '0', 'pass']],
       types: ['date', 'string', 'string', 'string', 'string']
