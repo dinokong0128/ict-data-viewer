@@ -90,10 +90,17 @@ export function parseErrors(value: string | number | null | undefined): string[]
 
 export function inferColumn(name: string): string | null {
   const key = normalize(name);
-  const match = Object.entries(columnAliases).find(([, aliases]) =>
-    aliases.some((alias) => key.includes(alias))
-  );
-  return match ? match[0] : null;
+  let bestCategory: string | null = null;
+  let bestLength = 0;
+  for (const [category, aliases] of Object.entries(columnAliases)) {
+    for (const alias of aliases) {
+      if (key.includes(alias) && alias.length > bestLength) {
+        bestCategory = category;
+        bestLength = alias.length;
+      }
+    }
+  }
+  return bestCategory;
 }
 
 export type SheetTab = {

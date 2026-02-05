@@ -25,6 +25,19 @@ describe('sheet helpers', () => {
   it('normalizes and infers columns', () => {
     expect(normalize('  Sn ')).toBe('sn');
     expect(inferColumn('Tester Name')).toBe('tester');
+    expect(inferColumn('Date')).toBe('date');
+    expect(inferColumn('Timestamp')).toBe('date');
+  });
+
+  it('prefers longer alias matches over shorter ones', () => {
+    // "Last_time" should match result (via "last_time") not date (via "time")
+    expect(inferColumn('Last_time')).toBe('result');
+    // "Serial Number" should match sn (via "serial number") not just sn (via "serial")
+    expect(inferColumn('Serial Number')).toBe('sn');
+    // "start time" should still match date
+    expect(inferColumn('start time')).toBe('date');
+    // "test time" should still match date
+    expect(inferColumn('Test Time')).toBe('date');
   });
 
   it('parses gviz and error values', () => {
