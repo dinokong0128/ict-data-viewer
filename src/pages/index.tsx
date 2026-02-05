@@ -13,10 +13,12 @@ import {
   formatDate,
   getCategoryOptions,
   groupByDate,
+  SHEET_ID,
   type SheetRow,
   type SheetState,
   type UtilizationEntry
 } from '@/lib/sheet';
+import { generateSampleData } from '@/lib/sampleData';
 const PAGE_SIZE = 12;
 
 type ChartConfig = {
@@ -37,16 +39,38 @@ export default function HomePage() {
   const [categorySelection, setCategorySelection] = useState('top');
   const [selectedErrors, setSelectedErrors] = useState<Set<string>>(new Set());
 
+  const [demoMode, setDemoMode] = useState(false);
+
   const loadData = useCallback(async () => {
     try {
       setStatus('Loading data...');
+      if (!SHEET_ID) {
+        const sample = generateSampleData();
+        const nextState = buildState(sample);
+        setSheetState(nextState);
+        setDemoMode(true);
+        setStatus(null);
+        return;
+      }
       const result = await fetchAllSheetData();
       const nextState = buildState(result);
       setSheetState(nextState);
+      setDemoMode(false);
       setStatus(null);
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Unable to load data.');
-      setSheetState(null);
+      // If live fetch fails, fall back to sample data so the app still works
+      try {
+        const sample = generateSampleData();
+        const nextState = buildState(sample);
+        setSheetState(nextState);
+        setDemoMode(true);
+        setStatus(
+          `Live data failed: ${error instanceof Error ? error.message : 'Unknown error'}. Showing demo data.`
+        );
+      } catch {
+        setStatus(error instanceof Error ? error.message : 'Unable to load data.');
+        setSheetState(null);
+      }
     }
   }, []);
 
@@ -271,6 +295,11 @@ export default function HomePage() {
         <div>
           <h1>ICT Data Viewer</h1>
           <p>Visualize tester output from the Google Sheet without downloading data locally.</p>
+          {demoMode && (
+            <p style={{ color: '#f59e0b', fontWeight: 'bold' }}>
+              Demo mode: Showing generated sample data. Set SHEET_ID to load real data.
+            </p>
+          )}
         </div>
       </header>
 

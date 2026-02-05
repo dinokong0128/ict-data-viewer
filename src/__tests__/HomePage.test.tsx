@@ -18,6 +18,7 @@ jest.mock('@/lib/sheet', () => {
   const dateStr = actual.formatDate(recentDate) + 'T12:00:00';
   return {
     ...actual,
+    SHEET_ID: 'test-sheet-id',
     fetchAllSheetData: jest.fn().mockResolvedValue({
       columns: ['Date', 'SN', 'Tester', 'Other', 'Last_time'],
       rows: [[dateStr, 'A1', 'T1', '0', 'pass']],
@@ -25,6 +26,10 @@ jest.mock('@/lib/sheet', () => {
     })
   };
 });
+
+jest.mock('@/lib/sampleData', () => ({
+  generateSampleData: jest.fn()
+}));
 
 describe('HomePage', () => {
   it('renders summary after loading data', async () => {

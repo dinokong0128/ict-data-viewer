@@ -62,7 +62,12 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
     return value;
   }
   if (typeof value === 'string') {
-    const match = value.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    // Google Sheets native format: Date(year,month,day,h,m,s)
+    const match = trimmed.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
     if (match) {
       const [year, month, day, hour, minute, second] = match
         .slice(1)
@@ -70,7 +75,7 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
       return new Date(year, month, day, hour || 0, minute || 0, second || 0);
     }
     // Extract hex Unix timestamp from strings like "Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)"
-    const hexMatch = value.match(/\(0x([0-9a-fA-F]+)\)/);
+    const hexMatch = trimmed.match(/\(0x([0-9a-fA-F]+)\)/);
     if (hexMatch) {
       const epoch = parseInt(hexMatch[1], 16);
       const fromHex = dateFromNumeric(epoch);
@@ -79,14 +84,47 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
       }
     }
     // Try parsing as a numeric string (Unix timestamp)
-    const num = Number(value);
+    const num = Number(trimmed);
     if (!Number.isNaN(num) && num > 0) {
       const fromNum = dateFromNumeric(num);
       if (fromNum) {
         return fromNum;
       }
     }
-    const parsed = new Date(value);
+    // Slash-separated dates: M/D/YYYY or D/M/YYYY (assume M/D/YYYY)
+    const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(.*))?$/);
+    if (slashMatch) {
+      const m = Number(slashMatch[1]);
+      const d = Number(slashMatch[2]);
+      const y = Number(slashMatch[3]);
+      const timePart = slashMatch[4];
+      const base = new Date(y, m - 1, d);
+      if (!Number.isNaN(base.getTime())) {
+        if (timePart) {
+          const full = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${timePart}`);
+          if (!Number.isNaN(full.getTime())) return full;
+        }
+        return base;
+      }
+    }
+    // YYYY/MM/DD format
+    const ymdSlash = trimmed.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:\s+(.*))?$/);
+    if (ymdSlash) {
+      const y = Number(ymdSlash[1]);
+      const m = Number(ymdSlash[2]);
+      const d = Number(ymdSlash[3]);
+      const timePart = ymdSlash[4];
+      const base = new Date(y, m - 1, d);
+      if (!Number.isNaN(base.getTime())) {
+        if (timePart) {
+          const full = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${timePart}`);
+          if (!Number.isNaN(full.getTime())) return full;
+        }
+        return base;
+      }
+    }
+    // Standard Date constructor fallback (ISO, RFC, etc.)
+    const parsed = new Date(trimmed);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed;
     }
@@ -290,7 +328,14 @@ export function buildState(result: FetchResult): SheetState {
     .filter((row): row is SheetRow => Boolean(row));
 
   if (!rows.length) {
-    throw new Error('No valid dates found. Check which column contains timestamps.');
+    const sample = result.rows.slice(0, 3).map((row) => row[dateColumn]);
+    throw new Error(
+      `No valid dates found. ` +
+      `Detected columns: [${result.columns.join(', ')}]. ` +
+      `Types: [${result.types.join(', ')}]. ` +
+      `Date column index: ${dateColumn} ("${result.columns[dateColumn] ?? '?'}"). ` +
+      `Sample values: ${JSON.stringify(sample)}`
+    );
   }
 
   return {

@@ -115,4 +115,71 @@ describe('sheet helpers', () => {
     expect(util[0].tester).toBe('T1');
     expect(util[0].count).toBe(2);
   });
+
+  it('parses M/D/YYYY date format', () => {
+    const date = parseGvizDate('1/15/2025');
+    expect(date).not.toBeNull();
+    expect(date!.getFullYear()).toBe(2025);
+    expect(date!.getMonth()).toBe(0); // January
+    expect(date!.getDate()).toBe(15);
+  });
+
+  it('parses M/D/YYYY with time', () => {
+    const date = parseGvizDate('12/31/2025 14:30:00');
+    expect(date).not.toBeNull();
+    expect(date!.getFullYear()).toBe(2025);
+    expect(date!.getMonth()).toBe(11);
+    expect(date!.getHours()).toBe(14);
+  });
+
+  it('parses YYYY/MM/DD date format', () => {
+    const date = parseGvizDate('2025/01/15');
+    expect(date).not.toBeNull();
+    expect(date!.getFullYear()).toBe(2025);
+    expect(date!.getMonth()).toBe(0);
+    expect(date!.getDate()).toBe(15);
+  });
+
+  it('returns null for empty or whitespace strings', () => {
+    expect(parseGvizDate('')).toBeNull();
+    expect(parseGvizDate('  ')).toBeNull();
+    expect(parseGvizDate(null)).toBeNull();
+  });
+
+  it('includes diagnostic info in buildState error', () => {
+    const badResult = {
+      columns: ['Foo', 'Bar'],
+      rows: [['not-a-date', 'baz']],
+      types: ['string', 'string']
+    };
+    expect(() => buildState(badResult)).toThrow(/Detected columns: \[Foo, Bar\]/);
+    expect(() => buildState(badResult)).toThrow(/Sample values:/);
+  });
+
+  it('builds state from M/D/YYYY dates', () => {
+    const slashResult = {
+      columns: ['Date', 'SN', 'Tester', 'Other', 'Last_time'],
+      rows: [
+        ['1/15/2025', 'A1', 'T1', '0', 'pass'],
+        ['1/16/2025', 'A2', 'T1', '0', 'fail']
+      ],
+      types: ['string', 'string', 'string', 'string', 'string']
+    };
+    const state = buildState(slashResult);
+    expect(state.rows).toHaveLength(2);
+    expect(state.rows[0].dateKey).toBe('2025-01-15');
+  });
+});
+
+describe('sampleData', () => {
+  it('generates valid FetchResult that buildState can parse', () => {
+    const { generateSampleData } = require('@/lib/sampleData');
+    const sample = generateSampleData();
+    expect(sample.columns.length).toBeGreaterThan(0);
+    expect(sample.rows.length).toBeGreaterThan(0);
+    const state = buildState(sample);
+    expect(state.rows.length).toBeGreaterThan(0);
+    expect(state.mapping.sn).toBeDefined();
+    expect(state.mapping.tester).toBeDefined();
+  });
 });
