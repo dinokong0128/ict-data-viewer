@@ -27,7 +27,7 @@ npm run build
 
 **Required environment variable:**
 ```bash
-export NEXT_PUBLIC_SHEET_ID="your-google-sheet-id"
+export SHEET_ID="your-google-sheet-id"
 ```
 
 ## Tech Stack
@@ -190,7 +190,7 @@ npm test -- --coverage   # With coverage report
 ### Requirements
 
 - Google Sheet must be shared with "Anyone with the link"
-- `NEXT_PUBLIC_SHEET_ID` environment variable must be set
+- `SHEET_ID` environment variable must be set
 
 ### Column Aliasing
 
@@ -251,7 +251,7 @@ Errors are stored as ampersand-separated strings in the source sheet:
 
 ### "Unable to load data" or "Not found"
 - Verify Google Sheet is shared with "Anyone with the link"
-- Confirm `NEXT_PUBLIC_SHEET_ID` is set correctly
+- Confirm `SHEET_ID` is set correctly
 - Check browser console for specific HTTP error codes
 
 ### "No valid dates found"
@@ -259,7 +259,7 @@ Errors are stored as ampersand-separated strings in the source sheet:
 - Check date format in the sheet (supports ISO strings, timestamps, Google Date format)
 
 ### Tests Failing
-- Ensure `jest.setup.ts` provides `NEXT_PUBLIC_SHEET_ID` (default: `test-sheet-id`)
+- Ensure `jest.setup.ts` provides `SHEET_ID` (default: `test-sheet-id`)
 - Run `npm install` to ensure all dev dependencies are installed
 
 ## Performance Considerations

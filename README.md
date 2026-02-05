@@ -17,7 +17,7 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
    ```
 2. Set the Google Sheet ID in an environment variable:
    ```bash
-   export NEXT_PUBLIC_SHEET_ID="your-sheet-id"
+   export SHEET_ID="your-sheet-id"
    ```
 3. Run the dev server:
    ```bash
@@ -38,8 +38,8 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
 
 ## Troubleshooting
 
-If the UI reports “Not found” or “Unable to load data,” confirm the Google Sheet is shared with **Anyone with the link** and that `NEXT_PUBLIC_SHEET_ID` is set correctly.
+If the UI reports “Not found” or “Unable to load data,” confirm the Google Sheet is shared with **Anyone with the link** and that `SHEET_ID` is set correctly.
 
 ## Vercel config
 
-Add `NEXT_PUBLIC_SHEET_ID` as an environment variable in your Vercel project settings.
+Add `SHEET_ID` as an environment variable in your Vercel project settings.

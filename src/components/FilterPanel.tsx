@@ -89,6 +89,7 @@ export function FilterPanel({
           <option value="fixture">Boards per fixture per day</option>
           <option value="operator">Boards per operator per day</option>
           <option value="errors">Errors per day</option>
+          <option value="utilization">Machine utilization</option>
         </select>
       </div>
       {categoryOptions.length > 0 && metric !== 'errors' ? (

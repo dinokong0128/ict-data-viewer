@@ -7,13 +7,15 @@ import {
   buildErrorCounts,
   buildState,
   buildSummary,
+  buildUtilization,
   fetchAllSheetData,
   filterRowsByRange,
   formatDate,
   getCategoryOptions,
   groupByDate,
   type SheetRow,
-  type SheetState
+  type SheetState,
+  type UtilizationEntry
 } from '@/lib/sheet';
 const PAGE_SIZE = 12;
 
@@ -80,13 +82,6 @@ export default function HomePage() {
     return filterRowsByRange(sheetState.rows, activeRange.start, activeRange.end);
   }, [sheetState, activeRange]);
 
-  const summaryItems = useMemo(() => {
-    if (!sheetState || !rowsInRange.length) {
-      return [];
-    }
-    return buildSummary(rowsInRange, sheetState.mapping);
-  }, [sheetState, rowsInRange]);
-
   const categoryOptions = useMemo(() => {
     if (!sheetState || !rowsInRange.length) {
       return [];
@@ -110,6 +105,32 @@ export default function HomePage() {
     return buildErrorCounts(rowsInRange);
   }, [rowsInRange]);
 
+  const utilizationData = useMemo<UtilizationEntry[]>(() => {
+    if (!sheetState || !rowsInRange.length || sheetState.mapping.tester === undefined) {
+      return [];
+    }
+    return buildUtilization(rowsInRange, sheetState.mapping.tester);
+  }, [sheetState, rowsInRange]);
+
+  const summaryItems = useMemo(() => {
+    if (!sheetState || !rowsInRange.length) {
+      return [];
+    }
+    if (metric === 'utilization' && utilizationData.length) {
+      const total = utilizationData.reduce((sum, u) => sum + u.count, 0);
+      const items = [
+        `Total tests: ${total}`,
+        `Active testers: ${utilizationData.length}`
+      ];
+      utilizationData.slice(0, 5).forEach((u) => {
+        const pct = total > 0 ? Math.round((u.count / total) * 100) : 0;
+        items.push(`${u.tester}: ${u.count} boards (${pct}%, ~${u.perDay}/day)`);
+      });
+      return items;
+    }
+    return buildSummary(rowsInRange, sheetState.mapping);
+  }, [sheetState, rowsInRange, metric, utilizationData]);
+
   const chartConfig = useMemo<ChartConfig>(() => {
     if (!rowsInRange.length) {
       return { labels: [], datasets: [], chartType: 'bar' };
@@ -126,6 +147,21 @@ export default function HomePage() {
             label: 'Boards tested',
             data: labels.map((label) => counts.get(label) || 0),
             backgroundColor: 'rgba(37, 99, 235, 0.7)'
+          }
+        ],
+        chartType: 'bar'
+      };
+    }
+
+    if (metric === 'utilization') {
+      const palette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6', '#ec4899', '#14b8a6'];
+      return {
+        labels: utilizationData.map((u) => u.tester),
+        datasets: [
+          {
+            label: 'Boards tested',
+            data: utilizationData.map((u) => u.count),
+            backgroundColor: utilizationData.map((_, i) => palette[i % palette.length])
           }
         ],
         chartType: 'bar'
@@ -186,7 +222,7 @@ export default function HomePage() {
     });
 
     return { labels, datasets, chartType: 'bar' };
-  }, [rowsInRange, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, sheetState]);
+  }, [rowsInRange, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, sheetState, utilizationData]);
 
   const tableRows = useMemo(() => {
     if (!rowsInRange.length) {
@@ -195,8 +231,13 @@ export default function HomePage() {
     if (!selectedDate) {
       return rowsInRange;
     }
+    if (metric === 'utilization' && sheetState?.mapping.tester !== undefined) {
+      return rowsInRange.filter(
+        (row) => String(row.raw[sheetState.mapping.tester] ?? '') === selectedDate
+      );
+    }
     return rowsInRange.filter((row) => row.dateKey === selectedDate);
-  }, [rowsInRange, selectedDate]);
+  }, [rowsInRange, selectedDate, metric, sheetState]);
 
   const tableColumns = useMemo(() => {
     if (!sheetState) {
@@ -218,7 +259,9 @@ export default function HomePage() {
   }, [sheetState]);
 
   const tableTitle = selectedDate
-    ? `Details for ${selectedDate} (${tableRows.length} rows)`
+    ? metric === 'utilization'
+      ? `Details for tester ${selectedDate} (${tableRows.length} rows)`
+      : `Details for ${selectedDate} (${tableRows.length} rows)`
     : `Details for selected range (${tableRows.length} rows)`;
 
   const statusMessage = status || (rowsInRange.length === 0 && sheetState ? 'No rows match the selected range.' : null);
@@ -284,7 +327,7 @@ export default function HomePage() {
           }}
         />
         <div className="card">
-          <h2>Range summary</h2>
+          <h2>{metric === 'utilization' ? 'Utilization summary' : 'Range summary'}</h2>
           <ul className="summary-list">
             {summaryItems.map((item) => (
               <li key={item}>{item}</li>

@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from 'react';
 export type ChartDataset = {
   label: string;
   data: number[];
-  backgroundColor?: string;
+  backgroundColor?: string | string[];
   borderColor?: string;
   stack?: string;
 };
