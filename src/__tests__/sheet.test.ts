@@ -16,8 +16,8 @@ import {
 const sampleResult = {
   columns: ['Date', 'SN', 'Tester', 'Other', 'Last_time'],
   rows: [
-    ['2024-05-01', 'A1', 'T1', 'E1&E2', 'pass'],
-    ['2024-05-02', 'A2', 'T1', '0', 'fail']
+    ['2024-05-01T12:00:00', 'A1', 'T1', 'E1&E2', 'pass'],
+    ['2024-05-02T12:00:00', 'A2', 'T1', '0', 'fail']
   ],
   types: ['date', 'string', 'string', 'string', 'string']
 };
@@ -43,12 +43,12 @@ describe('sheet helpers', () => {
 
   it('filters rows by range and groups by date', () => {
     const state = buildState(sampleResult);
-    const start = new Date('2024-05-01');
+    const start = new Date('2024-05-01T00:00:00');
     const end = new Date('2024-05-01T23:59:59');
     const filtered = filterRowsByRange(state.rows, start, end);
     expect(filtered).toHaveLength(1);
     const grouped = groupByDate(state.rows);
-    expect(grouped.get(formatDate(new Date('2024-05-01')))).toBe(1);
+    expect(grouped.get('2024-05-01')).toBe(1);
   });
 
   it('builds error counts', () => {
@@ -62,7 +62,7 @@ describe('sheet helpers', () => {
       sampleResult,
       {
         columns: sampleResult.columns,
-        rows: [['2024-05-03', 'A3', 'T2', '0', 'pass']],
+        rows: [['2024-05-03T12:00:00', 'A3', 'T2', '0', 'pass']],
         types: sampleResult.types
       }
     ]);

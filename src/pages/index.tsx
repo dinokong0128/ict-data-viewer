@@ -69,9 +69,8 @@ export default function HomePage() {
     if (!startDate || !endDate) {
       return null;
     }
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T23:59:59.999');
     return { start, end };
   }, [startDate, endDate]);
 
