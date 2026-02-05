@@ -98,23 +98,79 @@ export function inferColumn(name: string): string | null {
 
 export type SheetTab = {
   title: string;
+  gid: string;
 };
 
 export async function fetchSheetTabs(): Promise<SheetTab[]> {
   const sheetId = requireSheetId();
-  const url = `https://spreadsheets.google.com/feeds/worksheets/${sheetId}/public/full?alt=json`;
+  // Fetch the spreadsheet HTML page to parse embedded sheet metadata
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/edit?usp=sharing`;
   const response = await fetch(url, { cache: 'no-store' });
   if (!response.ok) {
-    throw new Error(`Unable to list sheet tabs (HTTP ${response.status}).`);
+    throw new Error(`Unable to access spreadsheet (HTTP ${response.status}). Ensure it is shared publicly.`);
   }
-  const data = (await response.json()) as {
-    feed?: { entry?: Array<{ title?: { $t?: string } }> };
+  const html = await response.text();
+
+  // Parse sheet metadata from the embedded JSON in the HTML
+  // Google Sheets embeds sheet info in a script variable
+  const sheetInfoMatch = html.match(/\{"sheets":\s*\[([^\]]+)\]/);
+  if (sheetInfoMatch) {
+    try {
+      const sheetsJson = JSON.parse(`{"sheets":[${sheetInfoMatch[1]}]}`);
+      const sheets = sheetsJson.sheets as Array<{ name?: string; id?: number }>;
+      if (sheets && sheets.length > 0) {
+        return sheets
+          .filter((s) => s.name && s.id !== undefined)
+          .map((s) => ({ title: s.name!, gid: String(s.id) }));
+      }
+    } catch {
+      // Fall through to alternative parsing
+    }
+  }
+
+  // Alternative: look for sheet tab links in the HTML
+  const tabMatches = html.matchAll(/gid=(\d+)[^>]*>([^<]+)</g);
+  const tabs: SheetTab[] = [];
+  for (const match of tabMatches) {
+    const gid = match[1];
+    const title = match[2].trim();
+    if (gid && title && !tabs.some((t) => t.gid === gid)) {
+      tabs.push({ title, gid });
+    }
+  }
+
+  if (tabs.length > 0) {
+    return tabs;
+  }
+
+  // Fallback: return default first sheet with gid=0
+  return [{ title: 'Sheet1', gid: '0' }];
+}
+
+export async function fetchSheetDataByGid(gid: string): Promise<FetchResult> {
+  const sheetId = requireSheetId();
+  const query = encodeURIComponent('select *');
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?gid=${gid}&tq=${query}`;
+  const response = await fetch(url, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Unable to reach the sheet (HTTP ${response.status}).`);
+  }
+  const text = await response.text();
+  const jsonStart = text.indexOf('{');
+  const jsonEnd = text.lastIndexOf('}');
+  if (jsonStart === -1 || jsonEnd === -1) {
+    throw new Error('Unexpected response from Google Sheets. Check sharing settings.');
+  }
+  const jsonText = text.substring(jsonStart, jsonEnd + 1);
+  const data = JSON.parse(jsonText) as {
+    table?: { cols: Array<{ label: string; id: string; type: string }>; rows: Array<{ c: Array<{ v: string | number | null } | null> }> };
   };
-  const entries = data.feed?.entry ?? [];
-  return entries
-    .map((entry) => entry.title?.$t)
-    .filter((title): title is string => Boolean(title))
-    .map((title) => ({ title }));
+  if (!data.table?.rows?.length) {
+    throw new Error('No rows returned. Confirm the tab is populated.');
+  }
+  const columns = data.table.cols.map((col) => col.label || col.id);
+  const rows = data.table.rows.map((row) => row.c.map((cell) => (cell ? cell.v : null)));
+  return { columns, rows, types: data.table.cols.map((col) => col.type) };
 }
 
 export async function fetchSheetData(sheetName: string): Promise<FetchResult> {
@@ -162,7 +218,7 @@ export async function fetchAllSheetData(): Promise<FetchResult> {
   if (!tabs.length) {
     throw new Error('No tabs found in the sheet.');
   }
-  const results = await Promise.all(tabs.map((tab) => fetchSheetData(tab.title)));
+  const results = await Promise.all(tabs.map((tab) => fetchSheetDataByGid(tab.gid)));
   return mergeFetchResults(results);
 }
 
