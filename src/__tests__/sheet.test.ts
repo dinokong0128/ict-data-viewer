@@ -72,7 +72,7 @@ describe('sheet helpers', () => {
   it('parses hex timestamp from custom format string', () => {
     const date = parseGvizDate('Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)');
     expect(date).not.toBeNull();
-    expect(date!.getFullYear()).toBe(2025);
+    expect(date!.getUTCFullYear()).toBe(2025);
     expect(date!.getUTCMonth()).toBe(11); // December
     expect(date!.getUTCDate()).toBe(31);
   });
@@ -105,7 +105,7 @@ describe('sheet helpers', () => {
     const state = buildState(unixResult);
     expect(state.rows).toHaveLength(2);
     expect(state.dateColumn).toBe(0);
-    expect(state.rows[0].date.getFullYear()).toBe(2025);
+    expect(state.rows[0].date.getUTCFullYear()).toBe(2025);
   });
 
   it('builds utilization data', () => {
