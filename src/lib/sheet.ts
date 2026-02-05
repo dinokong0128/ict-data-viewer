@@ -69,6 +69,15 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
         .map((part) => Number(part));
       return new Date(year, month, day, hour || 0, minute || 0, second || 0);
     }
+    // Extract hex Unix timestamp from strings like "Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)"
+    const hexMatch = value.match(/\(0x([0-9a-fA-F]+)\)/);
+    if (hexMatch) {
+      const epoch = parseInt(hexMatch[1], 16);
+      const fromHex = dateFromNumeric(epoch);
+      if (fromHex) {
+        return fromHex;
+      }
+    }
     // Try parsing as a numeric string (Unix timestamp)
     const num = Number(value);
     if (!Number.isNaN(num) && num > 0) {

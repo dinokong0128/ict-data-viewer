@@ -69,6 +69,14 @@ describe('sheet helpers', () => {
     expect(merged.rows).toHaveLength(3);
   });
 
+  it('parses hex timestamp from custom format string', () => {
+    const date = parseGvizDate('Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)');
+    expect(date).not.toBeNull();
+    expect(date!.getFullYear()).toBe(2025);
+    expect(date!.getUTCMonth()).toBe(11); // December
+    expect(date!.getUTCDate()).toBe(31);
+  });
+
   it('parses Unix timestamps in seconds', () => {
     const date = parseGvizDate(1714521600);
     expect(date).not.toBeNull();
@@ -85,19 +93,19 @@ describe('sheet helpers', () => {
     expect(inferColumn('UNIX_Time')).toBe('date');
   });
 
-  it('builds state from UNIX_Time column', () => {
+  it('builds state from UNIX_Time column with hex timestamps', () => {
     const unixResult = {
       columns: ['UNIX_Time', 'SN', 'Tester', 'Other', 'Last_time'],
       rows: [
-        [1714521600, 'A1', 'T1', 'E1&E2', 'pass'],
-        [1714608000, 'A2', 'T1', '0', 'fail']
+        ['Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)', 'A1', 'T1', 'E1&E2', 'pass'],
+        ['Wed-Dec-31-10:09:16-2025-PST-(0x695566cc)', 'A2', 'T1', '0', 'fail']
       ],
-      types: ['number', 'string', 'string', 'string', 'string']
+      types: ['string', 'string', 'string', 'string', 'string']
     };
     const state = buildState(unixResult);
     expect(state.rows).toHaveLength(2);
     expect(state.dateColumn).toBe(0);
-    expect(state.rows[0].date.getFullYear()).toBe(2024);
+    expect(state.rows[0].date.getFullYear()).toBe(2025);
   });
 
   it('builds utilization data', () => {
