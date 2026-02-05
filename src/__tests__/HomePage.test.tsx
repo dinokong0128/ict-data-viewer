@@ -11,11 +11,11 @@ jest.mock('@/components/DetailTable', () => ({
 
 jest.mock('@/lib/sheet', () => {
   const actual = jest.requireActual('@/lib/sheet');
-  // Use a date within the default 7-day range
-  const today = new Date();
-  const recentDate = new Date(today);
+  // Use a date within the default 7-day range (local noon to avoid TZ shifts)
+  const recentDate = new Date();
   recentDate.setDate(recentDate.getDate() - 1);
-  const dateStr = recentDate.toISOString().split('T')[0];
+  recentDate.setHours(12, 0, 0, 0);
+  const dateStr = actual.formatDate(recentDate) + 'T12:00:00';
   return {
     ...actual,
     fetchAllSheetData: jest.fn().mockResolvedValue({

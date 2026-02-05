@@ -1,8 +1,8 @@
-export const SHEET_ID = process.env.NEXT_PUBLIC_SHEET_ID;
+export const SHEET_ID = process.env.SHEET_ID;
 
 function requireSheetId(): string {
   if (!SHEET_ID) {
-    throw new Error('Missing NEXT_PUBLIC_SHEET_ID. Configure it in your environment.');
+    throw new Error('Missing SHEET_ID. Configure it in your environment.');
   }
   return SHEET_ID;
 }
@@ -28,7 +28,7 @@ export type FetchResult = {
 };
 
 const columnAliases: Record<string, string[]> = {
-  date: ['date', 'time', 'timestamp', 'start time', 'test time', 'datetime'],
+  date: ['date', 'time', 'timestamp', 'start time', 'test time', 'datetime', 'unix_time', 'unix time'],
   sn: ['sn', 'serial', 'serial number'],
   mac: ['mac'],
   family: ['family'],
@@ -42,6 +42,16 @@ const columnAliases: Record<string, string[]> = {
 
 export function normalize(value: string | number | null | undefined): string {
   return (value ?? '').toString().trim().toLowerCase();
+}
+
+function dateFromNumeric(n: number): Date | null {
+  if (!Number.isFinite(n) || n <= 0) {
+    return null;
+  }
+  // Unix timestamps in seconds are < 1e12; in milliseconds >= 1e12
+  const ms = n < 1e12 ? n * 1000 : n;
+  const d = new Date(ms);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 export function parseGvizDate(value: string | number | Date | null): Date | null {
@@ -59,19 +69,39 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
         .map((part) => Number(part));
       return new Date(year, month, day, hour || 0, minute || 0, second || 0);
     }
+    // Extract hex Unix timestamp from strings like "Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)"
+    const hexMatch = value.match(/\(0x([0-9a-fA-F]+)\)/);
+    if (hexMatch) {
+      const epoch = parseInt(hexMatch[1], 16);
+      const fromHex = dateFromNumeric(epoch);
+      if (fromHex) {
+        return fromHex;
+      }
+    }
+    // Try parsing as a numeric string (Unix timestamp)
+    const num = Number(value);
+    if (!Number.isNaN(num) && num > 0) {
+      const fromNum = dateFromNumeric(num);
+      if (fromNum) {
+        return fromNum;
+      }
+    }
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed;
     }
   }
   if (typeof value === 'number') {
-    return new Date(value);
+    return dateFromNumeric(value);
   }
   return null;
 }
 
 export function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 export function parseErrors(value: string | number | null | undefined): string[] {
@@ -236,6 +266,9 @@ export function buildState(result: FetchResult): SheetState {
     }
   });
 
+  if (dateColumn === -1 && mapping.date !== undefined) {
+    dateColumn = mapping.date;
+  }
   if (dateColumn === -1) {
     const dateIndex = result.columns.findIndex((col) => normalize(col).includes('date'));
     dateColumn = dateIndex >= 0 ? dateIndex : 0;
@@ -325,6 +358,35 @@ export function getCategoryOptions(rows: SheetRow[], fieldIndex: number): string
   return Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
     .map(([value]) => value);
+}
+
+export type UtilizationEntry = {
+  tester: string;
+  count: number;
+  days: number;
+  perDay: number;
+};
+
+export function buildUtilization(rows: SheetRow[], testerIndex: number): UtilizationEntry[] {
+  const testerDays: Record<string, Set<string>> = {};
+  const testerCounts: Record<string, number> = {};
+  rows.forEach((row) => {
+    const tester = String(row.raw[testerIndex] ?? '').trim();
+    if (!tester) {
+      return;
+    }
+    testerCounts[tester] = (testerCounts[tester] || 0) + 1;
+    if (!testerDays[tester]) {
+      testerDays[tester] = new Set();
+    }
+    testerDays[tester].add(row.dateKey);
+  });
+  return Object.entries(testerCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([tester, count]) => {
+      const days = testerDays[tester].size;
+      return { tester, count, days, perDay: Math.round(count / days) };
+    });
 }
 
 export function buildErrorCounts(rows: SheetRow[]): { errors: string[]; counts: Map<string, number> } {
