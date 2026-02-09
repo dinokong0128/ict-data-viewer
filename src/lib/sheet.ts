@@ -27,6 +27,9 @@ export type FetchResult = {
   types: string[];
 };
 
+/** Maximum number of months of data to keep after loading. */
+export const MAX_DATA_MONTHS = 3;
+
 const columnAliases: Record<string, string[]> = {
   date: ['date', 'time', 'timestamp', 'start time', 'test time', 'datetime', 'unix_time', 'unix time'],
   sn: ['sn', 'serial', 'serial number'],
@@ -164,6 +167,56 @@ export function inferColumn(name: string): string | null {
   return match ? match[0] : null;
 }
 
+/**
+ * Score how well a list of cell values looks like a header row.
+ * Returns the number of cells that match known column aliases.
+ */
+function scoreHeaderRow(cells: Array<string | number | null>): number {
+  return cells.filter((cell) => cell != null && inferColumn(String(cell)) !== null).length;
+}
+
+/**
+ * Detect and re-align headers when they aren't in the first row.
+ * The gviz API always treats row 1 as headers, but some tabs have
+ * content above the real header row. This scans the first N data rows
+ * to find one that looks like a header (matches known column aliases
+ * better than the current columns), then re-aligns.
+ */
+export function detectAndRealignHeaders(result: FetchResult): FetchResult {
+  const currentScore = scoreHeaderRow(result.columns);
+  // If the current columns already match 2+ aliases, trust them
+  if (currentScore >= 2) {
+    return result;
+  }
+
+  // Scan the first 20 data rows for a better header row
+  const scanLimit = Math.min(result.rows.length, 20);
+  let bestIndex = -1;
+  let bestScore = currentScore;
+
+  for (let i = 0; i < scanLimit; i++) {
+    const row = result.rows[i];
+    const score = scoreHeaderRow(row);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  if (bestIndex === -1) {
+    // No better header found, keep as-is
+    return result;
+  }
+
+  const headerRow = result.rows[bestIndex];
+  const newColumns = headerRow.map((cell) => (cell != null ? String(cell) : ''));
+  const newRows = result.rows.slice(bestIndex + 1);
+  // Re-infer types as 'string' since we lost the original gviz type info
+  const newTypes = newColumns.map(() => 'string');
+
+  return { columns: newColumns, rows: newRows, types: newTypes };
+}
+
 export type SheetTab = {
   title: string;
   gid: string;
@@ -238,7 +291,8 @@ export async function fetchSheetDataByGid(gid: string): Promise<FetchResult> {
   }
   const columns = data.table.cols.map((col) => col.label || col.id);
   const rows = data.table.rows.map((row) => row.c.map((cell) => (cell ? cell.v : null)));
-  return { columns, rows, types: data.table.cols.map((col) => col.type) };
+  const raw = { columns, rows, types: data.table.cols.map((col) => col.type) };
+  return detectAndRealignHeaders(raw);
 }
 
 export async function fetchSheetData(sheetName: string): Promise<FetchResult> {
@@ -265,7 +319,8 @@ export async function fetchSheetData(sheetName: string): Promise<FetchResult> {
   }
   const columns = data.table.cols.map((col) => col.label || col.id);
   const rows = data.table.rows.map((row) => row.c.map((cell) => (cell ? cell.v : null)));
-  return { columns, rows, types: data.table.cols.map((col) => col.type) };
+  const raw = { columns, rows, types: data.table.cols.map((col) => col.type) };
+  return detectAndRealignHeaders(raw);
 }
 
 export function mergeFetchResults(results: FetchResult[]): FetchResult {
@@ -338,8 +393,14 @@ export function buildState(result: FetchResult): SheetState {
     );
   }
 
+  // Cap data to the most recent MAX_DATA_MONTHS months
+  const maxDate = rows.reduce((max, row) => (row.date > max ? row.date : max), rows[0].date);
+  const cutoff = new Date(maxDate);
+  cutoff.setMonth(cutoff.getMonth() - MAX_DATA_MONTHS);
+  const trimmedRows = rows.filter((row) => row.date >= cutoff);
+
   return {
-    rows,
+    rows: trimmedRows,
     columns: result.columns,
     dateColumn,
     mapping
