@@ -27,6 +27,9 @@ export type FetchResult = {
   types: string[];
 };
 
+/** Maximum number of months of data to keep after loading. */
+export const MAX_DATA_MONTHS = 3;
+
 const columnAliases: Record<string, string[]> = {
   date: ['date', 'time', 'timestamp', 'start time', 'test time', 'datetime', 'unix_time', 'unix time'],
   sn: ['sn', 'serial', 'serial number'],
@@ -62,7 +65,12 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
     return value;
   }
   if (typeof value === 'string') {
-    const match = value.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    // Google Sheets native format: Date(year,month,day,h,m,s)
+    const match = trimmed.match(/Date\((\d+),(\d+),(\d+)(?:,(\d+),(\d+),(\d+))?\)/);
     if (match) {
       const [year, month, day, hour, minute, second] = match
         .slice(1)
@@ -70,7 +78,7 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
       return new Date(year, month, day, hour || 0, minute || 0, second || 0);
     }
     // Extract hex Unix timestamp from strings like "Wed-Dec-31-11:29:18-2025-PST-(0x6955798e)"
-    const hexMatch = value.match(/\(0x([0-9a-fA-F]+)\)/);
+    const hexMatch = trimmed.match(/\(0x([0-9a-fA-F]+)\)/);
     if (hexMatch) {
       const epoch = parseInt(hexMatch[1], 16);
       const fromHex = dateFromNumeric(epoch);
@@ -79,14 +87,47 @@ export function parseGvizDate(value: string | number | Date | null): Date | null
       }
     }
     // Try parsing as a numeric string (Unix timestamp)
-    const num = Number(value);
+    const num = Number(trimmed);
     if (!Number.isNaN(num) && num > 0) {
       const fromNum = dateFromNumeric(num);
       if (fromNum) {
         return fromNum;
       }
     }
-    const parsed = new Date(value);
+    // Slash-separated dates: M/D/YYYY or D/M/YYYY (assume M/D/YYYY)
+    const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(.*))?$/);
+    if (slashMatch) {
+      const m = Number(slashMatch[1]);
+      const d = Number(slashMatch[2]);
+      const y = Number(slashMatch[3]);
+      const timePart = slashMatch[4];
+      const base = new Date(y, m - 1, d);
+      if (!Number.isNaN(base.getTime())) {
+        if (timePart) {
+          const full = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${timePart}`);
+          if (!Number.isNaN(full.getTime())) return full;
+        }
+        return base;
+      }
+    }
+    // YYYY/MM/DD format
+    const ymdSlash = trimmed.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})(?:\s+(.*))?$/);
+    if (ymdSlash) {
+      const y = Number(ymdSlash[1]);
+      const m = Number(ymdSlash[2]);
+      const d = Number(ymdSlash[3]);
+      const timePart = ymdSlash[4];
+      const base = new Date(y, m - 1, d);
+      if (!Number.isNaN(base.getTime())) {
+        if (timePart) {
+          const full = new Date(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}T${timePart}`);
+          if (!Number.isNaN(full.getTime())) return full;
+        }
+        return base;
+      }
+    }
+    // Standard Date constructor fallback (ISO, RFC, etc.)
+    const parsed = new Date(trimmed);
     if (!Number.isNaN(parsed.getTime())) {
       return parsed;
     }
@@ -124,6 +165,56 @@ export function inferColumn(name: string): string | null {
     aliases.some((alias) => key.includes(alias))
   );
   return match ? match[0] : null;
+}
+
+/**
+ * Score how well a list of cell values looks like a header row.
+ * Returns the number of cells that match known column aliases.
+ */
+function scoreHeaderRow(cells: Array<string | number | null>): number {
+  return cells.filter((cell) => cell != null && inferColumn(String(cell)) !== null).length;
+}
+
+/**
+ * Detect and re-align headers when they aren't in the first row.
+ * The gviz API always treats row 1 as headers, but some tabs have
+ * content above the real header row. This scans the first N data rows
+ * to find one that looks like a header (matches known column aliases
+ * better than the current columns), then re-aligns.
+ */
+export function detectAndRealignHeaders(result: FetchResult): FetchResult {
+  const currentScore = scoreHeaderRow(result.columns);
+  // If the current columns already match 2+ aliases, trust them
+  if (currentScore >= 2) {
+    return result;
+  }
+
+  // Scan the first 20 data rows for a better header row
+  const scanLimit = Math.min(result.rows.length, 20);
+  let bestIndex = -1;
+  let bestScore = currentScore;
+
+  for (let i = 0; i < scanLimit; i++) {
+    const row = result.rows[i];
+    const score = scoreHeaderRow(row);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = i;
+    }
+  }
+
+  if (bestIndex === -1) {
+    // No better header found, keep as-is
+    return result;
+  }
+
+  const headerRow = result.rows[bestIndex];
+  const newColumns = headerRow.map((cell) => (cell != null ? String(cell) : ''));
+  const newRows = result.rows.slice(bestIndex + 1);
+  // Re-infer types as 'string' since we lost the original gviz type info
+  const newTypes = newColumns.map(() => 'string');
+
+  return { columns: newColumns, rows: newRows, types: newTypes };
 }
 
 export type SheetTab = {
@@ -200,7 +291,8 @@ export async function fetchSheetDataByGid(gid: string): Promise<FetchResult> {
   }
   const columns = data.table.cols.map((col) => col.label || col.id);
   const rows = data.table.rows.map((row) => row.c.map((cell) => (cell ? cell.v : null)));
-  return { columns, rows, types: data.table.cols.map((col) => col.type) };
+  const raw = { columns, rows, types: data.table.cols.map((col) => col.type) };
+  return detectAndRealignHeaders(raw);
 }
 
 export async function fetchSheetData(sheetName: string): Promise<FetchResult> {
@@ -227,7 +319,8 @@ export async function fetchSheetData(sheetName: string): Promise<FetchResult> {
   }
   const columns = data.table.cols.map((col) => col.label || col.id);
   const rows = data.table.rows.map((row) => row.c.map((cell) => (cell ? cell.v : null)));
-  return { columns, rows, types: data.table.cols.map((col) => col.type) };
+  const raw = { columns, rows, types: data.table.cols.map((col) => col.type) };
+  return detectAndRealignHeaders(raw);
 }
 
 export function mergeFetchResults(results: FetchResult[]): FetchResult {
@@ -290,11 +383,24 @@ export function buildState(result: FetchResult): SheetState {
     .filter((row): row is SheetRow => Boolean(row));
 
   if (!rows.length) {
-    throw new Error('No valid dates found. Check which column contains timestamps.');
+    const sample = result.rows.slice(0, 3).map((row) => row[dateColumn]);
+    throw new Error(
+      `No valid dates found. ` +
+      `Detected columns: [${result.columns.join(', ')}]. ` +
+      `Types: [${result.types.join(', ')}]. ` +
+      `Date column index: ${dateColumn} ("${result.columns[dateColumn] ?? '?'}"). ` +
+      `Sample values: ${JSON.stringify(sample)}`
+    );
   }
 
+  // Cap data to the most recent MAX_DATA_MONTHS months
+  const maxDate = rows.reduce((max, row) => (row.date > max ? row.date : max), rows[0].date);
+  const cutoff = new Date(maxDate);
+  cutoff.setMonth(cutoff.getMonth() - MAX_DATA_MONTHS);
+  const trimmedRows = rows.filter((row) => row.date >= cutoff);
+
   return {
-    rows,
+    rows: trimmedRows,
     columns: result.columns,
     dateColumn,
     mapping
