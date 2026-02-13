@@ -9,21 +9,24 @@ jest.mock('@/components/DetailTable', () => ({
   DetailTable: ({ title }: { title: string }) => <div>{title}</div>
 }));
 
-jest.mock('@/lib/sheet', () => {
-  const actual = jest.requireActual('@/lib/sheet');
-  // Use a date within the default 7-day range (local noon to avoid TZ shifts)
+jest.mock('@/lib/sheet', () => ({
+  ...jest.requireActual('@/lib/sheet'),
+  SHEET_ID: 'test-sheet-id'
+}));
+
+jest.mock('@/lib/adapters', () => {
+  const sheetActual = jest.requireActual('@/lib/sheet');
   const recentDate = new Date();
   recentDate.setDate(recentDate.getDate() - 1);
   recentDate.setHours(12, 0, 0, 0);
-  const dateStr = actual.formatDate(recentDate) + 'T12:00:00';
+  const dateStr = sheetActual.formatDate(recentDate) + 'T12:00:00';
   return {
-    ...actual,
-    SHEET_ID: 'test-sheet-id',
-    fetchAllSheetData: jest.fn().mockResolvedValue({
+    fetchData: jest.fn().mockResolvedValue({
       columns: ['Date', 'SN', 'Tester', 'Other', 'Last_time'],
       rows: [[dateStr, 'A1', 'T1', '0', 'pass']],
       types: ['date', 'string', 'string', 'string', 'string']
-    })
+    }),
+    getDataSourceType: jest.fn().mockReturnValue('sheet')
   };
 });
 

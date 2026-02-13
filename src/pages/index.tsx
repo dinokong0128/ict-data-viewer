@@ -8,7 +8,6 @@ import {
   buildState,
   buildSummary,
   buildUtilization,
-  fetchAllSheetData,
   filterRowsByRange,
   formatDate,
   getCategoryOptions,
@@ -18,6 +17,7 @@ import {
   type SheetState,
   type UtilizationEntry
 } from '@/lib/sheet';
+import { fetchData, getDataSourceType } from '@/lib/adapters';
 import { generateSampleData } from '@/lib/sampleData';
 const PAGE_SIZE = 12;
 
@@ -44,7 +44,8 @@ export default function HomePage() {
   const loadData = useCallback(async () => {
     try {
       setStatus('Loading data...');
-      if (!SHEET_ID) {
+      const sourceType = getDataSourceType();
+      if (sourceType === 'sheet' && !SHEET_ID) {
         const sample = generateSampleData();
         const nextState = buildState(sample);
         setSheetState(nextState);
@@ -52,7 +53,7 @@ export default function HomePage() {
         setStatus(null);
         return;
       }
-      const result = await fetchAllSheetData();
+      const result = await fetchData();
       const nextState = buildState(result);
       setSheetState(nextState);
       setDemoMode(false);
@@ -374,7 +375,9 @@ export default function HomePage() {
       />
 
       <footer>
-        Data source: Google Sheets. The app reads the sheet live and does not persist any data locally.
+        {getDataSourceType() === 'json'
+          ? 'Data source: Cached JSON (refreshed daily).'
+          : 'Data source: Google Sheets (live).'}
       </footer>
     </main>
   );
