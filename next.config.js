@@ -4,6 +4,9 @@ const nextConfig = {
   env: {
     SHEET_ID: process.env.SHEET_ID,
     DATA_SOURCE: process.env.DATA_SOURCE
+  },
+  outputFileTracingIncludes: {
+    '/api/sheet-data': ['./data/**']
   }
 };
 
