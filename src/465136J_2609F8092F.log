@@ -1,0 +1,66 @@
+----------------------------------------
+C2-ROTFIRM4.1
+Thu Mar 12 13:13:33 2026
+----------------------------------------
+r320_1_c HAS FAILED
+R320_1_C=22.1 Part# 7335548
+Measured:   23.290
+Nominal:    22.100
+High Limit: 23.083
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r7108_2_c HAS FAILED
+R7108_2_C=22.1 Part# 7335548
+Measured:   26.342
+Nominal:    22.100
+High Limit: 25.415
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+Board #: 0 
+Version:
+S/N:465136J+2609F808RM
+----------------------------------------
+C2-ROTFIRM4.1
+Thu Mar 12 13:13:33 2026
+----------------------------------------
+r320_1_c HAS FAILED
+R320_1_C=22.1 Part# 7335548
+Measured:   23.290
+Nominal:    22.100
+High Limit: 23.083
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r7108_2_c HAS FAILED
+R7108_2_C=22.1 Part# 7335548
+Measured:   26.342
+Nominal:    22.100
+High Limit: 25.415
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+Board #: 0 
+Version:
+S/N:465136J+2609F808RM
+&v2S Family: C2-ROT41
+&v2S Serial #:465136J+2609F808RM
+&v2S ############################
+&v2S #### BOARD ICT PASS  #####
+&v2S ############################
+&v1S Testplan-Released-04-04-2025
+&v2S ST:260312131259
+&v2S ET:260312131423
+&v2S SN:465136J+2609F808RM
+&v2S P/N:8215911 Rev:13
+&v3S Mac:A8698C60F9F2
+&v2S Mac_FruID:A8698C60F9F2
+&v2S u201_1_c CRC Blank:Pass
+&v2S OPERATOR ID:JT1227
+&v2S PF:Agilent3070 Rev:8.30
+&v3S Fixture_ID: FxSJ_WW4893
+&v2S TESTER:TESTER-4
+&v2S ***************************
+
+*

@@ -1,0 +1,50 @@
+----------------------------------------
+C2-ROTFIRM4.1
+Thu Mar 12 13:11:19 2026
+----------------------------------------
+c314_1_c HAS FAILED
+C314_1_C=1UF Part# 110-5581-01
+Measured:   0.78327u
+Nominal:    1.0000u
+High Limit: 1.2000u
+Low Limit:  0.80000u
+Capacitance in FARADS
+----------------------------------------
+Board #: 0 
+Version:
+S/N:465136J+2609F808HH
+----------------------------------------
+C2-ROTFIRM4.1
+Thu Mar 12 13:11:19 2026
+----------------------------------------
+c314_1_c HAS FAILED
+C314_1_C=1UF Part# 110-5581-01
+Measured:   0.78327u
+Nominal:    1.0000u
+High Limit: 1.2000u
+Low Limit:  0.80000u
+Capacitance in FARADS
+----------------------------------------
+Board #: 0 
+Version:
+S/N:465136J+2609F808HH
+&v2S Family: C2-ROT41
+&v2S Serial #:465136J+2609F808HH
+&v2S ############################
+&v2S #### BOARD ICT PASS  #####
+&v2S ############################
+&v1S Testplan-Released-04-04-2025
+&v2S ST:260312131048
+&v2S ET:260312131213
+&v2S SN:465136J+2609F808HH
+&v2S P/N:8215911 Rev:13
+&v3S Mac:A8698C613296
+&v2S Mac_FruID:A8698C613296
+&v2S u201_1_c CRC Blank:Pass
+&v2S OPERATOR ID:102059
+&v2S PF:Agilent3070 Rev:8.30
+&v3S Fixture_ID: FxSJ_WW3423
+&v2S TESTER:TESTER-2
+&v2S ***************************
+
+*
