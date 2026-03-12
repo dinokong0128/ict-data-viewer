@@ -1,5 +1,8 @@
 # CLAUDE.md - AI Assistant Guide for ICT Data Viewer
 
+ICT board test log parser and ingest endpoint. Lives in `pipeline/` with its own `CLAUDE.md`.
+See `pipeline/CLAUDE.md` for architecture, decisions, and what to build.
+
 ## Project Overview
 
 ICT Data Viewer is a Next.js + React dashboard that visualizes ICT (In-Circuit Test) logs directly from Google Sheets. The app reads data live from sheets and does **not** download or persist any records locally.
