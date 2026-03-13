@@ -1,7 +1,7 @@
 # CLAUDE.md - AI Assistant Guide for ICT Data Viewer
 
-ICT board test log parser and ingest endpoint. Lives in `pipeline/` with its own `CLAUDE.md`.
-See `pipeline/CLAUDE.md` for architecture, decisions, and what to build.
+This repo also contains a data pipeline under `pipeline/` with its own `CLAUDE.md`.
+When working on ingest, parsing, or the PowerShell script, start there.
 
 ## Project Overview
 
