@@ -1,56 +1,69 @@
-# ict-data-viewer
+# Pipeline — ICT data ingest
 
-Full-stack Next.js app that displays ICT board test data. Deployed on Vercel, backed by
-Supabase. Two concerns live in this repo:
+Parser and ingest endpoint for ICT board test logs. Part of the `ict-data-viewer` repo;
+the viewer/frontend context is in the root `CLAUDE.md`.
 
-- **Viewer** — the Next.js app (frontend + API routes) under `src/`
-- **Pipeline** — the Windows-side ingest script under `pipeline/`; see `pipeline/CLAUDE.md`
-
-## Repo structure
+## Where things live
 
 ```
-src/
-  app/api/ingest/route.ts   ← POST endpoint: authenticates, parses, upserts
-  lib/ict-parser.ts         ← pure log parser, no DB deps — test in isolation
-  lib/ict-db.ts             ← Supabase upsert logic
 pipeline/
-  CLAUDE.md                 ← PowerShell script context
-  ict-ingest.ps1            ← Windows Task Scheduler script
-  ict-ingest.config.json    ← gitignored: directories, API URL, secret
-docs/
-  schema.sql                ← Supabase DDL
-  log-format.md             ← log file format, error types, parser edge cases
-  sample-logs/              ← real log files to test the parser against
+  CLAUDE.md                       ← you are here
+  ict-ingest.ps1                  ← Windows Task Scheduler script
+  ict-ingest.config.json.template ← copy to .json locally, fill in values, gitignored
+  docs/
+    schema.sql                    ← full Supabase DDL
+    log-format.md                 ← log format, error types, parser edge cases
+    sample-logs/                  ← real log files to test the parser against
+
+src/                              ← Next.js app (repo root)
+  app/api/ingest/
+    route.ts                      ← POST endpoint: auth, parse, upsert
+  lib/
+    ict-parser.ts                 ← pure log parser, no DB deps — test in isolation
+    ict-db.ts                     ← Supabase upsert logic
 ```
 
-## Supabase
+## Architecture
 
-- Project ref: `maktqbmsfjkyjpyjgtzv` (ICT DB MCP connector)
-- Tables: `products`, `boards`, `tests`, `test_errors`
-- 3-month rolling delete on `tests`; `test_errors` cascade automatically
-- Schema: `docs/schema.sql`
+```
+Windows PC (outbound HTTPS only)
+  └── Task Scheduler → pipeline/ict-ingest.ps1
+        └── scans configured log directories hourly
+        └── POSTs new files to Vercel /api/ingest
 
-## Env vars
+Vercel (same project as viewer: ict-data-viewer)
+  └── POST /api/ingest
+        └── authenticates via x-ingest-secret header
+        └── calls lib/ict-parser.ts → lib/ict-db.ts → Supabase
+
+Supabase (free tier, 500MB limit)
+  └── project ref: maktqbmsfjkyjpyjgtzv  (ICT DB MCP connector)
+        └── products, boards, tests, test_errors
+        └── 3-month rolling delete; test_errors cascade automatically
+```
+
+## Env vars (add to Vercel project)
 
 ```
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=    # service role, not anon key
-INGEST_SECRET=                # shared secret, must match pipeline/ict-ingest.config.json
+INGEST_SECRET=                # arbitrary shared secret, matched in ict-ingest.config.json
 ```
 
-## Ingest API — POST /api/ingest
+## What to build
 
-- Auth: `x-ingest-secret` header
-- Body: `{ filename: string, content: string }`
-- Calls `lib/ict-parser.ts` → `lib/ict-db.ts`
-- Upserts with `ON CONFLICT (board_id, start_time, end_time) DO NOTHING`
-- See `docs/log-format.md` for full parser spec and edge cases
+- [ ] Run `pipeline/docs/schema.sql` in Supabase (use the ICT DB MCP connector)
+- [ ] `src/lib/ict-parser.ts` — see `pipeline/docs/log-format.md`, test against `pipeline/docs/sample-logs/`
+- [ ] `src/lib/ict-db.ts` — Supabase upsert logic
+- [ ] `src/app/api/ingest/route.ts` — auth, parse, upsert
+- [ ] Supabase scheduled function for 3-month rolling delete
 
 ## Key decisions
 
 | Decision | Choice | Reason |
 |---|---|---|
-| Parser location | Vercel API route (TypeScript) | Iterate without touching Windows machine |
+| Same repo as viewer | Yes | Single deployment, no CORS, no sync overhead |
+| Parse location | Vercel API route (TypeScript) | Iterate without touching Windows machine |
 | Value storage | raw string + float8 | Raw for display, float for calibration math |
 | No `raw_text` column | Dropped | Saves ~45% storage to fit 500MB free tier |
 | Retention | 3 months | ~365MB est. at current volume, fits free tier |
@@ -61,12 +74,3 @@ INGEST_SECRET=                # shared secret, must match pipeline/ict-ingest.co
 ## Volume (for reference)
 
 ~8,300 files/week, ~1,200 tests/day, ~6,100 errors/day, ~7.4 MB/day with Postgres overhead.
-
-## What to build
-
-- [ ] Run `docs/schema.sql` in Supabase (use the ICT DB MCP connector)
-- [ ] `src/lib/ict-parser.ts` — see `docs/log-format.md`, test against `docs/sample-logs/`
-- [ ] `src/lib/ict-db.ts` — Supabase upsert logic
-- [ ] `src/app/api/ingest/route.ts` — auth, parse, upsert
-- [ ] `pipeline/ict-ingest.ps1` — PowerShell ingest script
-- [ ] Supabase scheduled function for 3-month rolling delete
