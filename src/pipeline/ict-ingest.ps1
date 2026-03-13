@@ -9,6 +9,13 @@ if (Test-Path $logFile) {
 
 $batchSize = if ($config.PSObject.Properties['batchSize']) { [int]$config.batchSize } else { 20 }
 
+$fileAgeMinutes = if ($config.PSObject.Properties['fileAgeMinutes'] -and $null -ne $config.fileAgeMinutes) {
+  [int]$config.fileAgeMinutes
+} else {
+  $null
+}
+$cutoff = if ($null -ne $fileAgeMinutes) { (Get-Date).AddMinutes(-$fileAgeMinutes) } else { $null }
+
 # Collect all candidate files across configured directories
 $candidates = [System.Collections.ArrayList]@()
 foreach ($dir in $config.directories) {
@@ -17,8 +24,9 @@ foreach ($dir in $config.directories) {
     continue
   }
 
-  Get-ChildItem -Path $dir -File | ForEach-Object {
+  Get-ChildItem -Path $dir -File -Recurse | ForEach-Object {
     if ($ingested.ContainsKey($_.Name)) { return }
+    if ($null -ne $cutoff -and $_.LastWriteTime -lt $cutoff) { return }
     $null = $candidates.Add($_)
   }
 }

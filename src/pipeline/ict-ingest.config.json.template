@@ -2,5 +2,6 @@
   "directories": ["C:\\ICT\\logs\\line1", "C:\\ICT\\logs\\line2"],
   "apiUrl": "https://your-app.vercel.app/api/ingest",
   "apiSecret": "your-shared-secret",
-  "batchSize": 20
+  "batchSize": 20,
+  "fileAgeMinutes": 60
 }
