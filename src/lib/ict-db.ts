@@ -9,11 +9,17 @@
 import { createClient } from '@supabase/supabase-js';
 import type { ParsedTest } from './ict-parser';
 
+// Module-level singleton — one client per Vercel function instance,
+// reused across all upsertTest() calls in the same request batch.
+let _client: ReturnType<typeof createClient> | null = null;
+
 function getClient() {
+  if (_client) return _client;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set');
-  return createClient(url, key);
+  _client = createClient(url, key);
+  return _client;
 }
 
 /**

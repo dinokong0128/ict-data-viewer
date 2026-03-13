@@ -167,7 +167,13 @@ describe('upsertTest', () => {
   });
 
   it('throws when SUPABASE_URL is missing', async () => {
+    // The module-level singleton means getClient() only checks env vars on the
+    // first call. Use isolateModulesAsync to load a fresh module instance with
+    // no cached client so the env var check is exercised.
     delete process.env.SUPABASE_URL;
-    await expect(upsertTest(PARSED)).rejects.toThrow('SUPABASE_URL');
+    await jest.isolateModulesAsync(async () => {
+      const { upsertTest: freshUpsert } = await import('@/lib/ict-db');
+      await expect(freshUpsert(PARSED)).rejects.toThrow('SUPABASE_URL');
+    });
   });
 });

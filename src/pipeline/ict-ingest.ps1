@@ -29,7 +29,7 @@ Write-Host "Files to process: $($candidates.Count)"
 $batchNum = 0
 for ($i = 0; $i -lt $candidates.Count; $i += $batchSize) {
   $end   = [Math]::Min($i + $batchSize - 1, $candidates.Count - 1)
-  $batch = $candidates[$i..$end]
+  $batch = @($candidates)[$i..$end]
   $batchNum++
 
   $files = @()
