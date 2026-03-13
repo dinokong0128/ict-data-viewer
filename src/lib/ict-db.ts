@@ -6,19 +6,23 @@
  *   SUPABASE_SERVICE_KEY   (service role, not anon key)
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { ParsedTest } from './ict-parser';
+
+// Untyped client — we don't use Supabase's generated schema types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type UntypedClient = SupabaseClient<any, any, any>;
 
 // Module-level singleton — one client per Vercel function instance,
 // reused across all upsertTest() calls in the same request batch.
-let _client: ReturnType<typeof createClient> | null = null;
+let _client: UntypedClient | null = null;
 
-function getClient() {
+function getClient(): UntypedClient {
   if (_client) return _client;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set');
-  _client = createClient(url, key);
+  _client = createClient(url, key) as UntypedClient;
   return _client;
 }
 
