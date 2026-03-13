@@ -46,7 +46,7 @@ Supabase (free tier, 500MB limit)
 
 ```
 SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=    # service role, not anon key
+SUPABASE_SERVICE_KEY=    # service role, not anon key
 INGEST_SECRET=                # arbitrary shared secret, matched in ict-ingest.config.json
 ```
 
