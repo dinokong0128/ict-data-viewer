@@ -3,7 +3,7 @@
  *
  * ingest-route.test.ts
  *
- * Tests for POST /api/ingest.
+ * Tests for POST /api/ingest (batched).
  * Both the parser and DB layer are fully mocked — no real I/O.
  */
 
@@ -42,6 +42,14 @@ const PARSED_RESULT = {
   errors: [],
 };
 
+// Two-file batch used across most tests
+const BATCH = {
+  files: [
+    { filename: 'a.log', content: 'data1' },
+    { filename: 'b.log', content: 'data2' },
+  ],
+};
+
 function makeRequest(body: unknown, secret: string | null = 'test-secret'): NextRequest {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (secret !== null) headers['x-ingest-secret'] = secret;
@@ -60,68 +68,99 @@ beforeEach(() => {
 });
 
 describe('POST /api/ingest', () => {
+  // --- auth ---
   it('returns 401 when x-ingest-secret header is missing', async () => {
-    const res = await POST(makeRequest({ filename: 'a.log', content: 'x' }, null));
+    const res = await POST(makeRequest(BATCH, null));
     expect(res.status).toBe(401);
-    const body = await res.json();
-    expect(body).toHaveProperty('error');
+    expect(await res.json()).toHaveProperty('error');
   });
 
   it('returns 401 when x-ingest-secret is wrong', async () => {
-    const res = await POST(makeRequest({ filename: 'a.log', content: 'x' }, 'wrong'));
+    const res = await POST(makeRequest(BATCH, 'wrong'));
     expect(res.status).toBe(401);
   });
 
+  // --- body validation ---
   it('returns 400 for non-JSON body', async () => {
     const req = new NextRequest('http://localhost/api/ingest', {
       method: 'POST',
       headers: { 'x-ingest-secret': 'test-secret', 'content-type': 'text/plain' },
       body: 'not json',
     });
-    const res = await POST(req);
+    expect((await POST(req)).status).toBe(400);
+  });
+
+  it('returns 400 when files array is missing (old single-file shape)', async () => {
+    const res = await POST(makeRequest({ filename: 'a.log', content: 'x' }));
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when filename is missing from body', async () => {
-    const res = await POST(makeRequest({ content: 'x' }));
+  it('returns 400 when a file entry is missing filename', async () => {
+    const res = await POST(makeRequest({ files: [{ content: 'x' }] }));
     expect(res.status).toBe(400);
   });
 
-  it('returns 400 when content is missing from body', async () => {
-    const res = await POST(makeRequest({ filename: 'a.log' }));
+  it('returns 400 when a file entry is missing content', async () => {
+    const res = await POST(makeRequest({ files: [{ filename: 'a.log' }] }));
     expect(res.status).toBe(400);
   });
 
-  it('returns 200 with board_id and result on success', async () => {
-    const res = await POST(makeRequest({ filename: '465136J_2609F808HH.log', content: 'data' }));
+  // --- happy path ---
+  it('returns 200 with processed count and empty failed on full success', async () => {
+    const res = await POST(makeRequest(BATCH));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ processed: 2, failed: [] });
+  });
+
+  it('calls parseLog and upsertTest for each file in the batch', async () => {
+    await POST(makeRequest(BATCH));
+    expect(mockParseLog).toHaveBeenCalledTimes(2);
+    expect(mockParseLog).toHaveBeenCalledWith('a.log', 'data1');
+    expect(mockParseLog).toHaveBeenCalledWith('b.log', 'data2');
+    expect(mockUpsertTest).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns 200 with processed:0 and empty failed for an empty batch', async () => {
+    const res = await POST(makeRequest({ files: [] }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ processed: 0, failed: [] });
+  });
+
+  // --- partial failures ---
+  it('returns partial success when one file fails to parse', async () => {
+    mockParseLog
+      .mockReturnValueOnce(PARSED_RESULT)                               // a.log OK
+      .mockImplementationOnce(() => { throw new Error('bad format'); }); // b.log fails
+
+    const res = await POST(makeRequest(BATCH));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ ok: true, board_id: '465136J+2609F808HH', result: 'PASS' });
+    expect(body.processed).toBe(1);
+    expect(body.failed).toHaveLength(1);
+    expect(body.failed[0]).toMatchObject({ filename: 'b.log', error: expect.stringContaining('bad format') });
   });
 
-  it('calls parseLog with filename and content', async () => {
-    await POST(makeRequest({ filename: 'test.log', content: 'raw content' }));
-    expect(mockParseLog).toHaveBeenCalledWith('test.log', 'raw content');
-  });
+  it('returns partial success when one file fails at DB upsert', async () => {
+    mockUpsertTest
+      .mockResolvedValueOnce(undefined)                          // a.log OK
+      .mockRejectedValueOnce(new Error('DB connection failed')); // b.log fails
 
-  it('calls upsertTest with parsed result', async () => {
-    await POST(makeRequest({ filename: 'test.log', content: 'raw' }));
-    expect(mockUpsertTest).toHaveBeenCalledWith(PARSED_RESULT);
-  });
-
-  it('returns 500 when parseLog throws', async () => {
-    mockParseLog.mockImplementation(() => { throw new Error('bad format'); });
-    const res = await POST(makeRequest({ filename: 'bad.log', content: 'garbage' }));
-    expect(res.status).toBe(500);
+    const res = await POST(makeRequest(BATCH));
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toMatch(/bad format/);
+    expect(body.processed).toBe(1);
+    expect(body.failed).toHaveLength(1);
+    expect(body.failed[0]).toMatchObject({ filename: 'b.log', error: 'DB connection failed' });
   });
 
-  it('returns 500 when upsertTest rejects', async () => {
-    mockUpsertTest.mockRejectedValue(new Error('DB connection failed'));
-    const res = await POST(makeRequest({ filename: 'test.log', content: 'data' }));
-    expect(res.status).toBe(500);
+  it('returns processed:0 with all files in failed when every file errors', async () => {
+    mockParseLog.mockImplementation(() => { throw new Error('parse fail'); });
+
+    const res = await POST(makeRequest(BATCH));
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toMatch(/DB connection failed/);
+    expect(body.processed).toBe(0);
+    expect(body.failed).toHaveLength(2);
+    expect(body.failed.map((f: { filename: string }) => f.filename)).toEqual(['a.log', 'b.log']);
   });
 });

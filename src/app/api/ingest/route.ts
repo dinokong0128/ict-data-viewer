@@ -1,25 +1,29 @@
 /**
  * POST /api/ingest
  *
- * Receives a raw ICT log file from the Windows ingest script,
- * parses it, and upserts it into Supabase.
+ * Receives a batch of raw ICT log files from the Windows ingest script,
+ * parses them, and upserts into Supabase.
  *
  * Request headers:
  *   x-ingest-secret: <INGEST_SECRET env var>
  *
  * Request body (JSON):
- *   { filename: string, content: string }
+ *   { files: Array<{ filename: string, content: string }> }
  *
  * Responses:
- *   200  { ok: true, board_id: string, result: "PASS" | "FAIL" }
+ *   200  { processed: number, failed: Array<{ filename: string, error: string }> }
  *   400  { error: string }   — missing/invalid body
  *   401  { error: string }   — bad or missing secret
- *   500  { error: string }   — parse or DB failure
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseLog } from '@/lib/ict-parser';
 import { upsertTest } from '@/lib/ict-db';
+
+interface IngestFile {
+  filename: string;
+  content: string;
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // --- auth ---
@@ -39,33 +43,45 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (
     typeof body !== 'object' ||
     body === null ||
-    typeof (body as Record<string, unknown>).filename !== 'string' ||
-    typeof (body as Record<string, unknown>).content !== 'string'
+    !Array.isArray((body as Record<string, unknown>).files)
   ) {
     return NextResponse.json(
-      { error: 'Body must be { filename: string, content: string }' },
+      { error: 'Body must be { files: Array<{ filename: string, content: string }> }' },
       { status: 400 }
     );
   }
 
-  const { filename, content } = body as { filename: string; content: string };
+  const { files } = body as { files: unknown[] };
 
-  // --- parse log ---
-  let parsed;
-  try {
-    parsed = parseLog(filename, content);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Parse error: ${msg}` }, { status: 500 });
+  for (const file of files) {
+    if (
+      typeof file !== 'object' ||
+      file === null ||
+      typeof (file as Record<string, unknown>).filename !== 'string' ||
+      typeof (file as Record<string, unknown>).content !== 'string'
+    ) {
+      return NextResponse.json(
+        { error: 'Each file entry must be { filename: string, content: string }' },
+        { status: 400 }
+      );
+    }
   }
 
-  // --- upsert to Supabase ---
-  try {
-    await upsertTest(parsed);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `DB error: ${msg}` }, { status: 500 });
+  const validFiles = files as IngestFile[];
+
+  // --- process each file; accumulate results ---
+  const failed: Array<{ filename: string; error: string }> = [];
+  let processed = 0;
+
+  for (const { filename, content } of validFiles) {
+    try {
+      const parsed = parseLog(filename, content);
+      await upsertTest(parsed);
+      processed++;
+    } catch (err) {
+      failed.push({ filename, error: err instanceof Error ? err.message : String(err) });
+    }
   }
 
-  return NextResponse.json({ ok: true, board_id: parsed.board_id, result: parsed.result });
+  return NextResponse.json({ processed, failed });
 }
