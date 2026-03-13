@@ -1,7 +1,3 @@
-param(
-  [switch]$Backfill
-)
-
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $config    = Get-Content "$scriptDir\ict-ingest.config.json" | ConvertFrom-Json
 $logFile   = "$scriptDir\ingested.txt"
@@ -11,7 +7,7 @@ if (Test-Path $logFile) {
   Get-Content $logFile | ForEach-Object { $ingested[$_] = $true }
 }
 
-$batchSize = if ($Backfill) { 50 } else { 20 }
+$batchSize = if ($config.PSObject.Properties['batchSize']) { [int]$config.batchSize } else { 20 }
 
 # Collect all candidate files across configured directories
 $candidates = [System.Collections.ArrayList]@()
@@ -22,12 +18,12 @@ foreach ($dir in $config.directories) {
   }
 
   Get-ChildItem -Path $dir -File | ForEach-Object {
-    if (-not $Backfill -and $ingested.ContainsKey($_.Name)) { return }
+    if ($ingested.ContainsKey($_.Name)) { return }
     $null = $candidates.Add($_)
   }
 }
 
-Write-Host "Files to process: $($candidates.Count)$(if ($Backfill) { ' (backfill)' })"
+Write-Host "Files to process: $($candidates.Count)"
 
 # Send in batches
 $batchNum = 0
@@ -36,7 +32,6 @@ for ($i = 0; $i -lt $candidates.Count; $i += $batchSize) {
   $batch = $candidates[$i..$end]
   $batchNum++
 
-  # Read file contents and build request payload
   $files = @()
   foreach ($f in $batch) {
     $files += @{
