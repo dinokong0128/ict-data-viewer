@@ -68,7 +68,7 @@ beforeEach(() => {
   jest.clearAllMocks();
 
   process.env.SUPABASE_URL = 'https://example.supabase.co';
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+  process.env.SUPABASE_SERVICE_KEY = 'test-key';
 
   // Default happy path:
   // products upsert
