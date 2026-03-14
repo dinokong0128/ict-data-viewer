@@ -12,6 +12,7 @@ function makeRecord(overrides: Partial<TestRecord> & { id: number; serial_number
     fixture_id:   'fixture-01',
     tester:       'tester-01',
     source_file:  'test.log',
+    ingested_at:  '2026-03-12T08:02:00Z',
     mac_address:  '020000000001',
     rev:          '13',
     product_id:   'PART-REDACTED-001',
@@ -65,7 +66,7 @@ describe('DetailTable', () => {
       serial_number: 'SN-001',
       result: 'FAIL',
       test_errors: [
-        { error_type: 'analog', location: 'c01', subtest: null, part_spec: '1UF', unit: 'FARADS', measured_raw: '0.78327u', threshold_raw: null },
+        { error_type: 'analog', location: 'c01', subtest: null, part_spec: '1UF', unit: 'FARADS', measured_raw: '0.78327u', nominal_raw: '1.0000u', high_limit_raw: '1.2000u', low_limit_raw: '0.80000u', threshold_raw: null },
       ],
     });
     render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);

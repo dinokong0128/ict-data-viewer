@@ -13,6 +13,9 @@ export type TestErrorRecord = {
   part_spec: string;
   unit: string;
   measured_raw: string;
+  nominal_raw: string;
+  high_limit_raw: string;
+  low_limit_raw: string;
   threshold_raw: string | null;
 };
 
@@ -26,6 +29,7 @@ export type TestRecord = {
   fixture_id: string;
   tester: string;
   source_file: string;
+  ingested_at: string;   // ISO 8601, when the log was ingested
   // from boards join:
   serial_number: string;
   mac_address: string;

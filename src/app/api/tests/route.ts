@@ -31,7 +31,7 @@ async function fetchFromSupabase(start: string, end: string): Promise<TestRecord
       *,
       boards!inner (serial_number, mac_address, rev, product_id,
         products!inner (product_name, part_number)),
-      test_errors (error_type, location, subtest, part_spec, unit, measured_raw, threshold_raw)
+      test_errors (error_type, location, subtest, part_spec, unit, measured_raw, nominal_raw, high_limit_raw, low_limit_raw, threshold_raw)
     `)
     .gte('start_time', start)
     .lte('start_time', end + 'T23:59:59Z')
@@ -49,7 +49,8 @@ async function fetchFromSupabase(start: string, end: string): Promise<TestRecord
     operator_id:  row.operator_id ?? '',
     fixture_id:   row.fixture_id  ?? '',
     tester:       row.tester      ?? '',
-    source_file:  row.source_file ?? '',
+    source_file:  row.source_file  ?? '',
+    ingested_at:  row.ingested_at  ?? '',
     serial_number: row.boards?.serial_number ?? row.board_id,
     mac_address:  row.boards?.mac_address    ?? '',
     rev:          row.boards?.rev            ?? '',
@@ -72,7 +73,7 @@ type FixtureData = {
   tests: Array<{
     id: number; board_id: string; start_time: string; end_time: string;
     result: 'PASS' | 'FAIL'; operator_id: string; fixture_id: string;
-    tester: string; source_file: string;
+    tester: string; source_file: string; ingested_at: string;
   }>;
   test_errors: Array<{
     test_id: number; error_type: string; location: string; subtest: string | null;
@@ -96,13 +97,16 @@ function fetchFromFixture(start: string, end: string): TestRecord[] {
   fixture.test_errors.forEach((e) => {
     const list = errorsByTestId.get(e.test_id) ?? [];
     list.push({
-      error_type:    e.error_type,
-      location:      e.location,
-      subtest:       e.subtest,
-      part_spec:     e.part_spec,
-      unit:          e.unit,
-      measured_raw:  e.measured_raw,
-      threshold_raw: e.threshold_raw,
+      error_type:     e.error_type,
+      location:       e.location,
+      subtest:        e.subtest,
+      part_spec:      e.part_spec,
+      unit:           e.unit,
+      measured_raw:   e.measured_raw,
+      nominal_raw:    e.nominal_raw,
+      high_limit_raw: e.high_limit_raw,
+      low_limit_raw:  e.low_limit_raw,
+      threshold_raw:  e.threshold_raw,
     });
     errorsByTestId.set(e.test_id, list);
   });
@@ -141,6 +145,7 @@ function fetchFromFixture(start: string, end: string): TestRecord[] {
       fixture_id:   test.fixture_id,
       tester:       test.tester,
       source_file:  test.source_file,
+      ingested_at:  test.ingested_at,
       serial_number: board?.serial_number ?? test.board_id,
       mac_address:  board?.mac_address    ?? '',
       rev:          board?.rev            ?? '',

@@ -28,6 +28,7 @@ const MOCK_RECORD: TestRecord = {
   fixture_id: 'fixture-01',
   tester: 'tester-01',
   source_file: 'PROD-001_SN-XXXX-000001.log',
+  ingested_at: isoYesterday,
   serial_number: 'SN-XXXX-000001',
   mac_address: '020000000001',
   rev: '13',
