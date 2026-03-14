@@ -44,7 +44,7 @@ for ($i = 0; $i -lt $candidates.Count; $i += $batchSize) {
   foreach ($f in $batch) {
     $files += @{
       filename = $f.Name
-      content  = Get-Content $f.FullName -Raw -Encoding UTF8
+      content = Get-Content $f.FullName -Encoding UTF8 | Out-String
     }
   }
 
