@@ -67,8 +67,11 @@ beforeEach(() => {
   process.env.SUPABASE_SERVICE_KEY = 'test-key';
 
   // Default happy path:
-  // products upsert
-  const productsChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
+  // products upsert — chain: .upsert().select().single()
+  const productsSingleFn = jest.fn().mockResolvedValue({ data: { id: 'prod-uuid-001' }, error: null });
+  const productsSelectFn = jest.fn().mockReturnValue({ single: productsSingleFn });
+  const productsUpsertFn = jest.fn().mockReturnValue({ select: productsSelectFn });
+  const productsChain = { upsert: productsUpsertFn };
   // boards upsert
   const boardsChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
   // tests upsert — chain: .upsert().select().maybeSingle()
@@ -104,7 +107,7 @@ describe('upsertTest', () => {
     const upsertArg = mockFrom.mock.results[1].value.upsert.mock.calls[0][0];
     expect(upsertArg).toMatchObject({
       serial_number: 'SN-XXXX-000001',
-      product_id:    'PART-REDACTED-001',
+      product_id:    'prod-uuid-001',
       mac_address:   '020000000001',
       rev:           '13',
     });
@@ -138,7 +141,10 @@ describe('upsertTest', () => {
 
   it('skips test_errors insert when test already existed (ignoreDuplicates → null)', async () => {
     // Re-wire: tests returns null (already existed)
-    const productsChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
+    const productsSingleFn = jest.fn().mockResolvedValue({ data: { id: 'prod-uuid-001' }, error: null });
+    const productsSelectFn = jest.fn().mockReturnValue({ single: productsSingleFn });
+    const productsUpsertFn = jest.fn().mockReturnValue({ select: productsSelectFn });
+    const productsChain = { upsert: productsUpsertFn };
     const boardsChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
     const maybeSingleFn = jest.fn().mockResolvedValue({ data: null, error: null });
     const selectFn = jest.fn().mockReturnValue({ maybeSingle: maybeSingleFn });
@@ -158,9 +164,10 @@ describe('upsertTest', () => {
 
   it('throws when products upsert fails', async () => {
     mockFrom.mockReset();
-    mockFrom.mockReturnValueOnce({
-      upsert: jest.fn().mockResolvedValue({ error: { message: 'DB down' } }),
-    });
+    const singleFn = jest.fn().mockResolvedValue({ data: null, error: { message: 'DB down' } });
+    const selectFn = jest.fn().mockReturnValue({ single: singleFn });
+    const upsertFn = jest.fn().mockReturnValue({ select: selectFn });
+    mockFrom.mockReturnValueOnce({ upsert: upsertFn });
     await expect(upsertTest(PARSED)).rejects.toThrow('products upsert failed: DB down');
   });
 

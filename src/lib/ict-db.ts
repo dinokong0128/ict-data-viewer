@@ -38,7 +38,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
   const sb = getClient();
 
   // 1. products
-  const { error: prodErr } = await sb
+  const { data: productData, error: prodErr } = await sb
     .from('products')
     .upsert(
       {
@@ -46,8 +46,11 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
         product_name: parsed.product_name,
       },
       { onConflict: 'part_number' }
-    );
+    )
+    .select('id')
+    .single();
   if (prodErr) throw new Error(`products upsert failed: ${prodErr.message}`);
+  const productId = productData!.id as string;
 
   // 2. boards
   const { error: boardErr } = await sb
@@ -55,7 +58,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
     .upsert(
       {
         serial_number: parsed.serial_number,
-        product_id:    parsed.product_id,
+        product_id:    productId,
         mac_address:   parsed.mac_address,
         rev:           parsed.rev,
       },
