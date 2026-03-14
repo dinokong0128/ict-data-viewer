@@ -53,7 +53,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
   const productId = productData!.id as string;
 
   // 2. boards
-  const { error: boardErr } = await sb
+  const { data: boardData, error: boardErr } = await sb
     .from('boards')
     .upsert(
       {
@@ -63,15 +63,18 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
         rev:           parsed.rev,
       },
       { onConflict: 'serial_number' }
-    );
+    )
+    .select('id')
+    .single();
   if (boardErr) throw new Error(`boards upsert failed: ${boardErr.message}`);
+  const boardId = boardData!.id as string;
 
   // 3. tests — upsert with ignoreDuplicates so we can detect new vs existing
   const { data: testData, error: testErr } = await sb
     .from('tests')
     .upsert(
       {
-        board_id:    parsed.serial_number,
+        board_id:    boardId,
         start_time:  parsed.start_time.toISOString(),
         end_time:    parsed.end_time.toISOString(),
         result:      parsed.result,
