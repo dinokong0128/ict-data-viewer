@@ -1,21 +1,15 @@
 import React from 'react';
-import type { SheetRow } from '@/lib/sheet';
-
-type ColumnDef = {
-  index: number;
-  label: string;
-};
+import type { TestRecord } from '@/lib/testUtils';
 
 type DetailTableProps = {
-  rows: SheetRow[];
-  columns: ColumnDef[];
+  rows: TestRecord[];
   page: number;
   pageSize: number;
   onPageChange: (page: number) => void;
   title: string;
 };
 
-export function DetailTable({ rows, columns, page, pageSize, onPageChange, title }: DetailTableProps) {
+export function DetailTable({ rows, page, pageSize, onPageChange, title }: DetailTableProps) {
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
@@ -41,17 +35,31 @@ export function DetailTable({ rows, columns, page, pageSize, onPageChange, title
         <table>
           <thead>
             <tr>
-              {columns.map((column) => (
-                <th key={column.index}>{column.label}</th>
-              ))}
+              <th>Date</th>
+              <th>SN</th>
+              <th>Rev</th>
+              <th>Product</th>
+              <th>Result</th>
+              <th>Tester</th>
+              <th>Fixture</th>
+              <th>Operator</th>
+              <th>Errors</th>
             </tr>
           </thead>
           <tbody>
-            {pageRows.map((row, rowIndex) => (
-              <tr key={`${row.dateKey}-${rowIndex}`}>
-                {columns.map((column) => (
-                  <td key={column.index}>{row.raw[column.index] ?? ''}</td>
-                ))}
+            {pageRows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.start_time.slice(0, 10)}</td>
+                <td>{row.serial_number}</td>
+                <td>{row.rev}</td>
+                <td>{row.product_name}</td>
+                <td style={{ color: row.result === 'PASS' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                  {row.result}
+                </td>
+                <td>{row.tester}</td>
+                <td>{row.fixture_id}</td>
+                <td>{row.operator_id}</td>
+                <td>{row.test_errors.length > 0 ? row.test_errors.map((e) => e.location).join(', ') : '—'}</td>
               </tr>
             ))}
           </tbody>

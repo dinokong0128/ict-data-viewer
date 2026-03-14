@@ -1,38 +1,55 @@
+/**
+ * @jest-environment jsdom
+ */
 import { render, screen, waitFor } from '@testing-library/react';
 import HomePage from '@/pages/index';
+import type { TestRecord } from '@/lib/testUtils';
 
 jest.mock('@/components/ChartPanel', () => ({
-  ChartPanel: () => <div>Chart</div>
+  ChartPanel: () => <div>Chart</div>,
 }));
 
 jest.mock('@/components/DetailTable', () => ({
-  DetailTable: ({ title }: { title: string }) => <div>{title}</div>
+  DetailTable: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
-jest.mock('@/lib/sheet', () => {
-  const actual = jest.requireActual('@/lib/sheet');
-  // Use a date within the default 7-day range (local noon to avoid TZ shifts)
-  const recentDate = new Date();
-  recentDate.setDate(recentDate.getDate() - 1);
-  recentDate.setHours(12, 0, 0, 0);
-  const dateStr = actual.formatDate(recentDate) + 'T12:00:00';
-  return {
-    ...actual,
-    SHEET_ID: 'test-sheet-id',
-    fetchAllSheetData: jest.fn().mockResolvedValue({
-      columns: ['Date', 'SN', 'Tester', 'Other', 'Last_time'],
-      rows: [[dateStr, 'A1', 'T1', '0', 'pass']],
-      types: ['date', 'string', 'string', 'string', 'string']
-    })
-  };
+// Build a record dated within the last 30 days (default range)
+const yesterday = new Date();
+yesterday.setDate(yesterday.getDate() - 1);
+const isoYesterday = yesterday.toISOString().slice(0, 19) + 'Z';
+
+const MOCK_RECORD: TestRecord = {
+  id: 1,
+  board_id: 'SN-XXXX-000001',
+  start_time: isoYesterday,
+  end_time: isoYesterday,
+  result: 'PASS',
+  operator_id: 'operator-01',
+  fixture_id: 'fixture-01',
+  tester: 'tester-01',
+  source_file: 'PROD-001_SN-XXXX-000001.log',
+  serial_number: 'SN-XXXX-000001',
+  mac_address: '020000000001',
+  rev: '13',
+  product_id: 'PART-REDACTED-001',
+  product_name: 'Test Product A',
+  part_number: 'PART-REDACTED-001',
+  test_errors: [],
+};
+
+beforeEach(() => {
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ records: [MOCK_RECORD], demo: false }),
+  }) as jest.Mock;
 });
 
-jest.mock('@/lib/sampleData', () => ({
-  generateSampleData: jest.fn()
-}));
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 describe('HomePage', () => {
-  it('renders summary after loading data', async () => {
+  it('renders title and summary after loading data', async () => {
     render(<HomePage />);
 
     await waitFor(() => {
@@ -41,6 +58,19 @@ describe('HomePage', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Total tests: 1/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows demo banner when API returns demo:true', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ records: [MOCK_RECORD], demo: true }),
+    });
+
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Demo mode/i)).toBeInTheDocument();
     });
   });
 });

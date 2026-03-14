@@ -10,7 +10,6 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import type { ParsedTest } from './ict-parser';
 
 // Untyped client — we don't use Supabase's generated schema types.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type UntypedClient = SupabaseClient<any, any, any>;
 
 // Module-level singleton — one client per Vercel function instance,
@@ -30,8 +29,8 @@ function getClient(): UntypedClient {
  * Upsert a fully-parsed test session into Supabase.
  *
  * Order:
- *   1. products  (upsert)
- *   2. boards    (upsert)
+ *   1. products  (upsert on part_number)
+ *   2. boards    (upsert on serial_number)
  *   3. tests     (upsert with dedup key; capture id)
  *   4. test_errors (insert only when test row was newly created)
  */
@@ -43,12 +42,10 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
     .from('products')
     .upsert(
       {
-        id: parsed.product_id,
-        part_number: parsed.part_number,
-        revision: parsed.revision,
-        family: parsed.family,
+        part_number:  parsed.product_id,
+        product_name: parsed.product_name,
       },
-      { onConflict: 'id' }
+      { onConflict: 'part_number' }
     );
   if (prodErr) throw new Error(`products upsert failed: ${prodErr.message}`);
 
@@ -57,11 +54,12 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
     .from('boards')
     .upsert(
       {
-        id: parsed.board_id,
-        product_id: parsed.product_id,
-        mac_address: parsed.mac_address,
+        serial_number: parsed.serial_number,
+        product_id:    parsed.product_id,
+        mac_address:   parsed.mac_address,
+        rev:           parsed.rev,
       },
-      { onConflict: 'id' }
+      { onConflict: 'serial_number' }
     );
   if (boardErr) throw new Error(`boards upsert failed: ${boardErr.message}`);
 
@@ -70,15 +68,14 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
     .from('tests')
     .upsert(
       {
-        board_id: parsed.board_id,
-        start_time: parsed.start_time.toISOString(),
-        end_time: parsed.end_time.toISOString(),
-        result: parsed.result,
+        board_id:    parsed.serial_number,
+        start_time:  parsed.start_time.toISOString(),
+        end_time:    parsed.end_time.toISOString(),
+        result:      parsed.result,
         operator_id: parsed.operator_id,
-        tester: parsed.tester,
-        fixture_id: parsed.fixture_id,
-        testplan: parsed.testplan,
-        platform: parsed.platform,
+        fixture_id:  parsed.fixture_id,
+        tester:      parsed.tester,
+        source_file: parsed.source_file,
       },
       { onConflict: 'board_id,start_time,end_time', ignoreDuplicates: true }
     )
@@ -96,19 +93,17 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
 
   const { error: errErr } = await sb.from('test_errors').insert(
     parsed.errors.map((e) => ({
-      test_id: testId,
-      component: e.component,
-      component_value: e.component_value,
-      part_number: e.part_number,
-      measured_raw: e.measured_raw,
-      measured: e.measured,
-      nominal_raw: e.nominal_raw,
-      nominal: e.nominal,
+      test_id:        testId,
+      error_type:     e.error_type,
+      location:       e.location,
+      subtest:        e.subtest,
+      part_spec:      e.part_spec,
+      unit:           e.unit,
+      measured_raw:   e.measured_raw,
+      nominal_raw:    e.nominal_raw,
       high_limit_raw: e.high_limit_raw,
-      high_limit: e.high_limit,
-      low_limit_raw: e.low_limit_raw,
-      low_limit: e.low_limit,
-      unit: e.unit,
+      low_limit_raw:  e.low_limit_raw,
+      threshold_raw:  e.threshold_raw,
     }))
   );
   if (errErr) throw new Error(`test_errors insert failed: ${errErr.message}`);

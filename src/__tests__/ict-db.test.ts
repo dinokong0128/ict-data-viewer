@@ -32,34 +32,30 @@ import { upsertTest } from '@/lib/ict-db';
 import type { ParsedTest } from '@/lib/ict-parser';
 
 const PARSED: ParsedTest = {
-  board_id: '465136J+2609F808HH',
-  product_id: '465136J',
-  family: 'C2-ROT41',
-  part_number: '8215911',
-  revision: '13',
-  mac_address: 'A8698C613296',
-  result: 'PASS',
-  start_time: new Date('2026-03-12T13:10:48Z'),
-  end_time: new Date('2026-03-12T13:12:13Z'),
-  operator_id: '102059',
-  tester: 'TESTER-2',
-  fixture_id: 'FxSJ_WW3423',
-  testplan: 'Released-04-04-2025',
-  platform: 'Agilent3070 Rev:8.30',
+  serial_number: 'SN-XXXX-000001',
+  product_id:    'PART-REDACTED-001',
+  product_name:  'Test Product A',
+  rev:           '13',
+  mac_address:   '020000000001',
+  result:        'PASS',
+  start_time:    new Date('2026-03-12T13:10:48Z'),
+  end_time:      new Date('2026-03-12T13:12:13Z'),
+  operator_id:   'operator-01',
+  tester:        'tester-01',
+  fixture_id:    'fixture-01',
+  source_file:   'PROD-001_SN-XXXX-000001.log',
   errors: [
     {
-      component: 'c314_1_c',
-      component_value: '1UF',
-      part_number: '110-5581-01',
-      measured_raw: '0.78327u',
-      measured: 7.8327e-7,
-      nominal_raw: '1.0000u',
-      nominal: 1e-6,
+      error_type:     'analog',
+      location:       'c01',
+      subtest:        null,
+      part_spec:      '1UF',
+      unit:           'FARADS',
+      measured_raw:   '0.78327u',
+      nominal_raw:    '1.0000u',
       high_limit_raw: '1.2000u',
-      high_limit: 1.2e-6,
-      low_limit_raw: '0.80000u',
-      low_limit: 8e-7,
-      unit: 'FARADS',
+      low_limit_raw:  '0.80000u',
+      threshold_raw:  null,
     },
   ],
 };
@@ -97,10 +93,8 @@ describe('upsertTest', () => {
     expect(productsCall).toBe('products');
     const upsertArg = mockFrom.mock.results[0].value.upsert.mock.calls[0][0];
     expect(upsertArg).toMatchObject({
-      id: '465136J',
-      part_number: '8215911',
-      revision: '13',
-      family: 'C2-ROT41',
+      part_number:  'PART-REDACTED-001',
+      product_name: 'Test Product A',
     });
   });
 
@@ -109,9 +103,10 @@ describe('upsertTest', () => {
     expect(mockFrom.mock.calls[1][0]).toBe('boards');
     const upsertArg = mockFrom.mock.results[1].value.upsert.mock.calls[0][0];
     expect(upsertArg).toMatchObject({
-      id: '465136J+2609F808HH',
-      product_id: '465136J',
-      mac_address: 'A8698C613296',
+      serial_number: 'SN-XXXX-000001',
+      product_id:    'PART-REDACTED-001',
+      mac_address:   '020000000001',
+      rev:           '13',
     });
   });
 
@@ -120,9 +115,10 @@ describe('upsertTest', () => {
     expect(mockFrom.mock.calls[2][0]).toBe('tests');
     const upsertArg = mockFrom.mock.results[2].value.upsert.mock.calls[0][0];
     expect(upsertArg).toMatchObject({
-      board_id: '465136J+2609F808HH',
-      result: 'PASS',
-      operator_id: '102059',
+      board_id:    'SN-XXXX-000001',
+      result:      'PASS',
+      operator_id: 'operator-01',
+      source_file: 'PROD-001_SN-XXXX-000001.log',
     });
   });
 
@@ -132,9 +128,11 @@ describe('upsertTest', () => {
     const insertArg = mockFrom.mock.results[3].value.insert.mock.calls[0][0];
     expect(insertArg).toHaveLength(1);
     expect(insertArg[0]).toMatchObject({
-      test_id: 42,
-      component: 'c314_1_c',
-      unit: 'FARADS',
+      test_id:    42,
+      error_type: 'analog',
+      location:   'c01',
+      part_spec:  '1UF',
+      unit:       'FARADS',
     });
   });
 

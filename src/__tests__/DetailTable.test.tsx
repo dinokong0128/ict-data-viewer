@@ -1,15 +1,30 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DetailTable } from '@/components/DetailTable';
-import type { SheetRow } from '@/lib/sheet';
+import type { TestRecord } from '@/lib/testUtils';
 
-const rows: SheetRow[] = [
-  { raw: ['2024-05-01', 'A1'], date: new Date('2024-05-01'), dateKey: '2024-05-01', errors: [] },
-  { raw: ['2024-05-02', 'A2'], date: new Date('2024-05-02'), dateKey: '2024-05-02', errors: [] }
-];
+function makeRecord(overrides: Partial<TestRecord> & { id: number; serial_number: string }): TestRecord {
+  return {
+    board_id:     overrides.serial_number,
+    start_time:   '2026-03-12T08:00:00Z',
+    end_time:     '2026-03-12T08:02:00Z',
+    result:       'PASS',
+    operator_id:  'operator-01',
+    fixture_id:   'fixture-01',
+    tester:       'tester-01',
+    source_file:  'test.log',
+    mac_address:  '020000000001',
+    rev:          '13',
+    product_id:   'PART-REDACTED-001',
+    product_name: 'Test Product A',
+    part_number:  'PART-REDACTED-001',
+    test_errors:  [],
+    ...overrides,
+  };
+}
 
-const columns = [
-  { index: 0, label: 'Date' },
-  { index: 1, label: 'SN' }
+const rows: TestRecord[] = [
+  makeRecord({ id: 1, serial_number: 'SN-XXXX-000001' }),
+  makeRecord({ id: 2, serial_number: 'SN-XXXX-000002' }),
 ];
 
 describe('DetailTable', () => {
@@ -18,7 +33,6 @@ describe('DetailTable', () => {
     render(
       <DetailTable
         rows={rows}
-        columns={columns}
         page={1}
         pageSize={1}
         onPageChange={onPageChange}
@@ -26,8 +40,35 @@ describe('DetailTable', () => {
       />
     );
 
-    expect(screen.getByText('A1')).toBeInTheDocument();
+    expect(screen.getByText('SN-XXXX-000001')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(onPageChange).toHaveBeenCalledWith(2);
+  });
+
+  it('shows PASS result', () => {
+    render(
+      <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
+    );
+    expect(screen.getByText('PASS')).toBeInTheDocument();
+  });
+
+  it('shows FAIL result', () => {
+    render(
+      <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001', result: 'FAIL' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
+    );
+    expect(screen.getByText('FAIL')).toBeInTheDocument();
+  });
+
+  it('shows error locations for failed board', () => {
+    const row = makeRecord({
+      id: 1,
+      serial_number: 'SN-001',
+      result: 'FAIL',
+      test_errors: [
+        { error_type: 'analog', location: 'c01', subtest: null, part_spec: '1UF', unit: 'FARADS', measured_raw: '0.78327u', threshold_raw: null },
+      ],
+    });
+    render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
+    expect(screen.getByText('c01')).toBeInTheDocument();
   });
 });
