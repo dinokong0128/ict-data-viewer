@@ -53,7 +53,7 @@ export function DetailTable({ rows, page, pageSize, onPageChange, title }: Detai
                 <td>{row.serial_number}</td>
                 <td>{row.rev}</td>
                 <td>{row.product_name}</td>
-                <td style={{ color: row.result === 'PASS' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
+                <td style={{ color: row.result === 'pass' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
                   {row.result}
                 </td>
                 <td>{row.tester}</td>

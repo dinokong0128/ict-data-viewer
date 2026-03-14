@@ -144,19 +144,19 @@ describe('parseLog — timestamps', () => {
 // ---------------------------------------------------------------------------
 describe('parseLog — result', () => {
   it('parses PASS result from SN-000001', () => {
-    expect(parseLog('PROD-001_SN-XXXX-000001.log', log000001).result).toBe('PASS');
+    expect(parseLog('PROD-001_SN-XXXX-000001.log', log000001).result).toBe('pass');
   });
 
   it('parses PASS result from SN-000002', () => {
-    expect(parseLog('PROD-001_SN-XXXX-000002.log', log000002).result).toBe('PASS');
+    expect(parseLog('PROD-001_SN-XXXX-000002.log', log000002).result).toBe('pass');
   });
 
   it('parses PASS result from SN-000003 (multi-session; most recent session is PASS)', () => {
-    expect(parseLog('PROD-001_SN-XXXX-000003.log', log000003).result).toBe('PASS');
+    expect(parseLog('PROD-001_SN-XXXX-000003.log', log000003).result).toBe('pass');
   });
 
   it('parses FAIL result from SN-000004', () => {
-    expect(parseLog('PROD-001_SN-XXXX-000004.log', log000004).result).toBe('FAIL');
+    expect(parseLog('PROD-001_SN-XXXX-000004.log', log000004).result).toBe('fail');
   });
 });
 

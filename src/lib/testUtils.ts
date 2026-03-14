@@ -24,7 +24,7 @@ export type TestRecord = {
   board_id: string;      // = serial_number (FK to boards)
   start_time: string;    // ISO 8601
   end_time: string;      // ISO 8601
-  result: 'PASS' | 'FAIL';
+  result: 'pass' | 'fail';
   operator_id: string;
   fixture_id: string;
   tester: string;
@@ -78,8 +78,8 @@ export function groupByDate(records: TestRecord[]): Map<string, number> {
 
 export function buildSummary(records: TestRecord[]): string[] {
   const uniqueBoards = new Set(records.map((r) => r.serial_number));
-  const passCount = records.filter((r) => r.result === 'PASS').length;
-  const failCount = records.filter((r) => r.result === 'FAIL').length;
+  const passCount = records.filter((r) => r.result === 'pass').length;
+  const failCount = records.filter((r) => r.result === 'fail').length;
 
   const errorCounts: Record<string, number> = {};
   records.forEach((r) => {

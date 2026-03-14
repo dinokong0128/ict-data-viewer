@@ -13,7 +13,7 @@ export interface ParsedTest {
   product_name:  string;  // was: family
   rev:           string;  // PCB hardware revision (per-board), e.g. "13"
   mac_address:   string;
-  result:       'PASS' | 'FAIL';
+  result:       'pass' | 'fail';
   start_time:    Date;
   end_time:      Date;
   operator_id:   string;
@@ -74,7 +74,7 @@ export function parseLog(filename: string, content: string): ParsedTest {
 
   // --- collect metadata from &v[123]S lines ---
   const meta: Record<string, string> = {};
-  let result: 'PASS' | 'FAIL' | null = null;
+  let result: 'pass' | 'fail' | null = null;
 
   for (const raw of lines) {
     const line = raw.trimEnd();
@@ -88,8 +88,8 @@ export function parseLog(filename: string, content: string): ParsedTest {
     // Use first-found result: a log file can contain multiple sessions (newest
     // at top); the first metadata block corresponds to the most recent test run.
     if (!result) {
-      if (value.includes('BOARD ICT PASS')) { result = 'PASS'; continue; }
-      if (value.includes('BOARD ICT FAIL')) { result = 'FAIL'; continue; }
+      if (value.includes('BOARD ICT PASS')) { result = 'pass'; continue; }
+      if (value.includes('BOARD ICT FAIL')) { result = 'fail'; continue; }
     } else {
       if (value.includes('BOARD ICT PASS') || value.includes('BOARD ICT FAIL')) continue;
     }
@@ -264,7 +264,7 @@ export function parseLog(filename: string, content: string): ParsedTest {
     product_name: meta['family'] ?? '',
     rev,
     mac_address:  meta['mac'] ?? '',
-    result:       result ?? 'FAIL',
+    result:       result ?? 'fail',
     start_time,
     end_time,
     operator_id:  meta['operator id'] ?? '',

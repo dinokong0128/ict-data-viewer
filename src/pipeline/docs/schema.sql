@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS tests (
   board_id     text        NOT NULL REFERENCES boards(serial_number),
   start_time   timestamptz NOT NULL,
   end_time     timestamptz NOT NULL,
-  result       text        NOT NULL,  -- 'PASS' or 'FAIL'
+  result       text        NOT NULL,  -- 'pass' or 'fail'
   operator_id  text,
   fixture_id   text,
   tester       text,
