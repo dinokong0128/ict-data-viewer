@@ -72,8 +72,11 @@ beforeEach(() => {
   const productsSelectFn = jest.fn().mockReturnValue({ single: productsSingleFn });
   const productsUpsertFn = jest.fn().mockReturnValue({ select: productsSelectFn });
   const productsChain = { upsert: productsUpsertFn };
-  // boards upsert
-  const boardsChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
+  // boards upsert — chain: .upsert().select().single()
+  const boardsSingleFn = jest.fn().mockResolvedValue({ data: { id: 'board-uuid-001' }, error: null });
+  const boardsSelectFn = jest.fn().mockReturnValue({ single: boardsSingleFn });
+  const boardsUpsertFn = jest.fn().mockReturnValue({ select: boardsSelectFn });
+  const boardsChain = { upsert: boardsUpsertFn };
   // tests upsert — chain: .upsert().select().maybeSingle()
   const maybeSingleFn = jest.fn().mockResolvedValue({ data: { id: 42 }, error: null });
   const selectFn = jest.fn().mockReturnValue({ maybeSingle: maybeSingleFn });
@@ -118,7 +121,7 @@ describe('upsertTest', () => {
     expect(mockFrom.mock.calls[2][0]).toBe('tests');
     const upsertArg = mockFrom.mock.results[2].value.upsert.mock.calls[0][0];
     expect(upsertArg).toMatchObject({
-      board_id:    'SN-XXXX-000001',
+      board_id:    'board-uuid-001',
       result:      'PASS',
       operator_id: 'operator-01',
       source_file: 'PROD-001_SN-XXXX-000001.log',
@@ -145,7 +148,10 @@ describe('upsertTest', () => {
     const productsSelectFn = jest.fn().mockReturnValue({ single: productsSingleFn });
     const productsUpsertFn = jest.fn().mockReturnValue({ select: productsSelectFn });
     const productsChain = { upsert: productsUpsertFn };
-    const boardsChain = { upsert: jest.fn().mockResolvedValue({ error: null }) };
+    const boardsSingleFn2 = jest.fn().mockResolvedValue({ data: { id: 'board-uuid-001' }, error: null });
+    const boardsSelectFn2 = jest.fn().mockReturnValue({ single: boardsSingleFn2 });
+    const boardsUpsertFn2 = jest.fn().mockReturnValue({ select: boardsSelectFn2 });
+    const boardsChain = { upsert: boardsUpsertFn2 };
     const maybeSingleFn = jest.fn().mockResolvedValue({ data: null, error: null });
     const selectFn = jest.fn().mockReturnValue({ maybeSingle: maybeSingleFn });
     const testsUpsertFn = jest.fn().mockReturnValue({ select: selectFn });
