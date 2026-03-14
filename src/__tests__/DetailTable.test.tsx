@@ -7,7 +7,7 @@ function makeRecord(overrides: Partial<TestRecord> & { id: number; serial_number
     board_id:     overrides.serial_number,
     start_time:   '2026-03-12T08:00:00Z',
     end_time:     '2026-03-12T08:02:00Z',
-    result:       'PASS',
+    result:       'pass',
     operator_id:  'operator-01',
     fixture_id:   'fixture-01',
     tester:       'tester-01',
@@ -50,21 +50,21 @@ describe('DetailTable', () => {
     render(
       <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
     );
-    expect(screen.getByText('PASS')).toBeInTheDocument();
+    expect(screen.getByText('pass')).toBeInTheDocument();
   });
 
   it('shows FAIL result', () => {
     render(
-      <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001', result: 'FAIL' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
+      <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001', result: 'fail' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
     );
-    expect(screen.getByText('FAIL')).toBeInTheDocument();
+    expect(screen.getByText('fail')).toBeInTheDocument();
   });
 
   it('shows error locations for failed board', () => {
     const row = makeRecord({
       id: 1,
       serial_number: 'SN-001',
-      result: 'FAIL',
+      result: 'fail',
       test_errors: [
         { error_type: 'analog', location: 'c01', subtest: null, part_spec: '1UF', unit: 'FARADS', measured_raw: '0.78327u', nominal_raw: '1.0000u', high_limit_raw: '1.2000u', low_limit_raw: '0.80000u', threshold_raw: null },
       ],

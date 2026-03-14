@@ -72,7 +72,7 @@ type FixtureData = {
   }>;
   tests: Array<{
     id: number; board_id: string; start_time: string; end_time: string;
-    result: 'PASS' | 'FAIL'; operator_id: string; fixture_id: string;
+    result: 'pass' | 'fail'; operator_id: string; fixture_id: string;
     tester: string; source_file: string; ingested_at: string;
   }>;
   test_errors: Array<{

@@ -30,7 +30,7 @@ const PARSED_RESULT = {
   product_name:  'Test Product A',
   rev:           '13',
   mac_address:   '',
-  result:        'PASS' as const,
+  result:        'pass' as const,
   start_time:    new Date(),
   end_time:      new Date(),
   operator_id:   '',

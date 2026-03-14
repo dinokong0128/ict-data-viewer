@@ -37,7 +37,7 @@ const PARSED: ParsedTest = {
   product_name:  'Test Product A',
   rev:           '13',
   mac_address:   '020000000001',
-  result:        'PASS',
+  result:        'pass',
   start_time:    new Date('2026-03-12T13:10:48Z'),
   end_time:      new Date('2026-03-12T13:12:13Z'),
   operator_id:   'operator-01',
@@ -122,7 +122,7 @@ describe('upsertTest', () => {
     const upsertArg = mockFrom.mock.results[2].value.upsert.mock.calls[0][0];
     expect(upsertArg).toMatchObject({
       board_id:    'board-uuid-001',
-      result:      'PASS',
+      result:      'pass',
       operator_id: 'operator-01',
       source_file: 'PROD-001_SN-XXXX-000001.log',
     });

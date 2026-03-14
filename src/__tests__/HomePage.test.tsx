@@ -23,7 +23,7 @@ const MOCK_RECORD: TestRecord = {
   board_id: 'SN-XXXX-000001',
   start_time: isoYesterday,
   end_time: isoYesterday,
-  result: 'PASS',
+  result: 'pass',
   operator_id: 'operator-01',
   fixture_id: 'fixture-01',
   tester: 'tester-01',
