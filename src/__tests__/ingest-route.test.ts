@@ -25,21 +25,19 @@ const mockParseLog = parseLog as jest.Mock;
 const mockUpsertTest = upsertTest as jest.Mock;
 
 const PARSED_RESULT = {
-  board_id: '465136J+2609F808HH',
-  product_id: '465136J',
-  result: 'PASS' as const,
-  family: 'C2-ROT41',
-  part_number: '8215911',
-  revision: '13',
-  mac_address: '',
-  start_time: new Date(),
-  end_time: new Date(),
-  operator_id: '',
-  tester: '',
-  fixture_id: '',
-  testplan: '',
-  platform: '',
-  errors: [],
+  serial_number: 'SN-XXXX-000001',
+  product_id:    'PART-REDACTED-001',
+  product_name:  'Test Product A',
+  rev:           '13',
+  mac_address:   '',
+  result:        'PASS' as const,
+  start_time:    new Date(),
+  end_time:      new Date(),
+  operator_id:   '',
+  fixture_id:    '',
+  tester:        '',
+  source_file:   'a.log',
+  errors:        [],
 };
 
 // Two-file batch used across most tests

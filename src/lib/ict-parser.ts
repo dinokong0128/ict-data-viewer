@@ -8,53 +8,35 @@
  */
 
 export interface ParsedTest {
-  board_id: string;       // "465136J+2609F808HH"  (canonical: + not _)
-  product_id: string;     // part before +: "465136J"
-  family: string;
-  part_number: string;    // "8215911"
-  revision: string;       // "13"
-  mac_address: string;
-  result: 'PASS' | 'FAIL';
-  start_time: Date;
-  end_time: Date;
-  operator_id: string;
-  tester: string;
-  fixture_id: string;
-  testplan: string;
-  platform: string;
-  errors: ParsedError[];
+  serial_number: string;  // serial part only, e.g. "SN-XXXX-000001"
+  product_id:    string;  // part before + in the board composite id, e.g. "PART-REDACTED-001"
+  product_name:  string;  // was: family
+  rev:           string;  // PCB hardware revision (per-board), e.g. "13"
+  mac_address:   string;
+  result:       'PASS' | 'FAIL';
+  start_time:    Date;
+  end_time:      Date;
+  operator_id:   string;
+  tester:        string;
+  fixture_id:    string;
+  source_file:   string;  // original filename passed into parseLog()
+  errors:        ParsedError[];
 }
 
 export interface ParsedError {
-  component: string;
-  component_value: string;
-  part_number: string;
-  measured_raw: string;
-  measured: number | null;
-  nominal_raw: string;
-  nominal: number | null;
+  error_type:     'analog' | 'digital_pin' | 'shorts_report' | 'unknown';
+  location:       string;       // PCB component reference (was: component)
+  subtest:        string | null;
+  part_spec:      string;       // component value, e.g. "1UF" (was: component_value)
+  unit:           string;       // "FARADS" | "OHMS" | ""
+  measured_raw:   string;
+  nominal_raw:    string;
   high_limit_raw: string;
-  high_limit: number | null;
-  low_limit_raw: string;
-  low_limit: number | null;
-  unit: string;
+  low_limit_raw:  string;
+  threshold_raw:  string | null;
 }
 
 const SEPARATOR = '----------------------------------------';
-
-/**
- * Convert a value string with optional SI suffix to its SI base unit.
- * Suffixes: u → ×10⁻⁶, p → ×10⁻¹², k → ×10³, M → ×10⁶
- * Returns null when the string cannot be parsed.
- */
-export function parseSiValue(raw: string): number | null {
-  const match = raw.trim().match(/^([\d.]+)([upkM]?)$/);
-  if (!match) return null;
-  const num = parseFloat(match[1]);
-  const suffix = match[2];
-  const multipliers: Record<string, number> = { u: 1e-6, p: 1e-12, k: 1e3, M: 1e6, '': 1 };
-  return num * (multipliers[suffix] ?? 1);
-}
 
 /**
  * Parse an YYMMDDHHMMSS timestamp string (e.g. "260311134729") into a Date (UTC).
@@ -73,21 +55,22 @@ export function parseTimestamp(ts: string): Date {
 /**
  * Parse a raw ICT log file.
  *
- * @param filename  Original filename, e.g. "465136J_2609F808HH.log".
- *                  The first underscore is replaced with + to form board_id.
+ * @param filename  Original filename, e.g. "PROD-001_SN-XXXX-000001.log".
+ *                  The first underscore is replaced with + to derive product_id and serial_number.
  * @param content   Full file text (LF or CRLF).
  */
 export function parseLog(filename: string, content: string): ParsedTest {
   const lines = content.split(/\r?\n/);
 
-  // --- board_id from filename ---
+  // --- serial_number and product_id from filename ---
   const base = filename.replace(/\.log$/i, '');
   const firstUnderscore = base.indexOf('_');
-  const board_id =
+  const composite =
     firstUnderscore !== -1
       ? base.slice(0, firstUnderscore) + '+' + base.slice(firstUnderscore + 1)
       : base;
-  const product_id = board_id.split('+')[0] ?? board_id;
+  const product_id = composite.split('+')[0] ?? composite;
+  const serial_number = composite.split('+')[1] ?? composite;
 
   // --- collect metadata from &v[123]S lines ---
   const meta: Record<string, string> = {};
@@ -96,39 +79,44 @@ export function parseLog(filename: string, content: string): ParsedTest {
   for (const raw of lines) {
     const line = raw.trimEnd();
     // Metadata lines are PCL escape sequences: ESC (0x1b) + &v2S + space + content
-    const metaMatch = line.match(/^\x1b&v[123]S\s*(.*)/);
+    // ESC prefix (\x1b) is optional — some log files omit it in text-mode output
+    const metaMatch = line.match(/^(?:\x1b)?&v[123]S\s*(.*)/);
     if (!metaMatch) continue;
 
     const value = metaMatch[1].trim();
 
-    if (value.includes('BOARD ICT PASS')) { result = 'PASS'; continue; }
-    if (value.includes('BOARD ICT FAIL')) { result = 'FAIL'; continue; }
-    if (value.startsWith('Testplan-')) { meta['testplan'] = value.slice('Testplan-'.length); continue; }
+    // Use first-found result: a log file can contain multiple sessions (newest
+    // at top); the first metadata block corresponds to the most recent test run.
+    if (!result) {
+      if (value.includes('BOARD ICT PASS')) { result = 'PASS'; continue; }
+      if (value.includes('BOARD ICT FAIL')) { result = 'FAIL'; continue; }
+    } else {
+      if (value.includes('BOARD ICT PASS') || value.includes('BOARD ICT FAIL')) continue;
+    }
+    if (value.startsWith('Testplan-')) continue; // dropped field
     if (value.startsWith('***') || value.startsWith('###')) continue; // decorative
 
     const colonIdx = value.indexOf(':');
     if (colonIdx === -1) continue;
     const key = value.slice(0, colonIdx).trim().toLowerCase();
     const val = value.slice(colonIdx + 1).trim();
-    meta[key] = val;
+    // First occurrence wins (most recent session's data)
+    if (!(key in meta)) meta[key] = val;
   }
 
-  // P/N line is "8215911 Rev:13"
-  let part_number = '';
-  let revision = '';
+  // P/N line is "PART-REDACTED-001 Rev:13"
+  let rev = '';
   const pn = meta['p/n'] ?? '';
   const revMatch = pn.match(/^(.+?)\s+Rev:(.+)$/);
   if (revMatch) {
-    part_number = revMatch[1].trim();
-    revision = revMatch[2].trim();
-  } else {
-    part_number = pn;
+    // product_id already comes from the filename; use revision as the board rev
+    rev = revMatch[2].trim();
   }
 
   const start_time = meta['st'] ? parseTimestamp(meta['st']) : new Date(0);
-  const end_time = meta['et'] ? parseTimestamp(meta['et']) : new Date(0);
+  const end_time   = meta['et'] ? parseTimestamp(meta['et']) : new Date(0);
 
-  // --- collect error blocks from all runs, dedup by component name ---
+  // --- collect error blocks from all runs, dedup by location ---
   const errorMap = new Map<string, ParsedError>();
 
   let i = 0;
@@ -138,10 +126,9 @@ export function parseLog(filename: string, content: string): ParsedTest {
     if (line !== SEPARATOR) { i++; continue; }
 
     // We're at a separator — peek ahead to see if this starts an error block
-    // A separator followed by a "X HAS FAILED" line (after skipping blank/machine/date lines)
     let j = i + 1;
 
-    // Skip equipment identifier (C2-ROTFIRM4.1) and date line
+    // Skip equipment identifier and date line
     while (j < lines.length && lines[j].trimEnd() !== SEPARATOR && !lines[j].includes('HAS FAILED')) {
       j++;
     }
@@ -153,18 +140,14 @@ export function parseLog(filename: string, content: string): ParsedTest {
       const l = lines[j].trimEnd();
 
       if (l === SEPARATOR) {
-        // Could be: end of error block, start of next error, or end of run
-        // Peek at next non-empty line
         let k = j + 1;
         while (k < lines.length && lines[k].trim() === '') k++;
         if (k >= lines.length) break;
         const next = lines[k].trimEnd();
-        // If next line starts a new error: continue parsing
         if (next.includes('HAS FAILED') || next === 'DEVICES IN PARALLEL') {
           j = k;
           continue;
         }
-        // Otherwise end of this run block
         break;
       }
 
@@ -173,53 +156,101 @@ export function parseLog(filename: string, content: string): ParsedTest {
       const failedMatch = l.match(/^(\S+)\s+HAS FAILED\s*$/i);
       if (!failedMatch) { j++; continue; }
 
-      const component = failedMatch[1].toLowerCase();
+      const location = failedMatch[1].toLowerCase();
       j++;
 
-      // Next line: COMPONENT=value Part# part#
+      // Next line: COMPONENT=value Part# part#  OR  Subtest: ...  OR vector = ...
       const defLine = (lines[j] ?? '').trimEnd();
-      const defMatch = defLine.match(/^[^=]+=([^\s]+)\s+Part#\s+(.+)$/i);
-      const component_value = defMatch ? defMatch[1] : '';
-      const part_number_err = defMatch ? defMatch[2].trim() : '';
-      j++;
 
-      const measLine = (lines[j] ?? '').trimEnd();
-      const measured_raw = measLine.replace(/^Measured:\s*/i, '').trim();
-      j++;
+      // Detect error type and extract fields based on what follows
+      let error_type: ParsedError['error_type'] = 'unknown';
+      let part_spec = '';
+      let subtest: string | null = null;
+      let measured_raw = '';
+      let nominal_raw = '';
+      let high_limit_raw = '';
+      let low_limit_raw = '';
+      let threshold_raw: string | null = null;
+      let unit = '';
 
-      const nomLine = (lines[j] ?? '').trimEnd();
-      const nominal_raw = nomLine.replace(/^Nominal:\s*/i, '').trim();
-      j++;
+      if (/^vector\s*=/i.test(defLine)) {
+        // Digital pin failure: vector = <number>
+        error_type = 'digital_pin';
+        // Skip past the digital pin block (Status, Pass/Fail error, BRRCC NODE PIN, pin list)
+        j++;
+        // Consume lines until next separator or HAS FAILED
+        while (j < lines.length) {
+          const dl = lines[j].trimEnd();
+          if (dl === SEPARATOR || dl.includes('HAS FAILED')) break;
+          j++;
+        }
+      } else if (/^Subtest:/i.test(defLine)) {
+        // Resistance/shorts check with subtest
+        error_type = 'shorts_report';
+        subtest = defLine.replace(/^Subtest:\s*/i, '').trim();
+        j++;
+        // measured_raw
+        const measLine = (lines[j] ?? '').trimEnd();
+        measured_raw = measLine.replace(/^Measured:\s*/i, '').trim();
+        j++;
+        // threshold_raw
+        const threshLine = (lines[j] ?? '').trimEnd();
+        if (/^Threshold:/i.test(threshLine)) {
+          threshold_raw = threshLine.replace(/^Threshold:\s*/i, '').trim();
+          j++;
+        }
+        // unit line: "Jumper Resistance in OHMS" etc.
+        const unitLine = (lines[j] ?? '').trimEnd();
+        const unitMatch = unitLine.match(/\bin\s+(FARADS|OHMS)\b/i);
+        unit = unitMatch ? unitMatch[1].toUpperCase() : '';
+        j++;
+      } else {
+        // Standard analog component failure: COMP=value Part# part#
+        const defMatch = defLine.match(/^[^=]+=([^\s]+)(?:\s+Part#\s+(.+))?$/i);
+        part_spec = defMatch ? defMatch[1] : '';
+        j++;
 
-      const hiLine = (lines[j] ?? '').trimEnd();
-      const high_limit_raw = hiLine.replace(/^High Limit:\s*/i, '').trim();
-      j++;
+        const measLine = (lines[j] ?? '').trimEnd();
+        measured_raw = measLine.replace(/^Measured:\s*/i, '').trim();
+        j++;
 
-      const loLine = (lines[j] ?? '').trimEnd();
-      const low_limit_raw = loLine.replace(/^Low Limit:\s*/i, '').trim();
-      j++;
+        const nomLine = (lines[j] ?? '').trimEnd();
+        nominal_raw = nomLine.replace(/^Nominal:\s*/i, '').trim();
+        j++;
 
-      const unitLine = (lines[j] ?? '').trimEnd();
-      // e.g. "Capacitance in FARADS" or "Resistance in OHMS"
-      const unitMatch = unitLine.match(/\bin\s+(FARADS|OHMS)\b/i);
-      const unit = unitMatch ? unitMatch[1].toUpperCase() : unitLine.trim();
-      j++;
+        const hiLine = (lines[j] ?? '').trimEnd();
+        high_limit_raw = hiLine.replace(/^High Limit:\s*/i, '').trim();
+        j++;
 
-      // Deduplicate by component name (keep first occurrence)
-      if (!errorMap.has(component)) {
-        errorMap.set(component, {
-          component,
-          component_value,
-          part_number: part_number_err,
-          measured_raw,
-          measured: parseSiValue(measured_raw),
-          nominal_raw,
-          nominal: parseSiValue(nominal_raw),
-          high_limit_raw,
-          high_limit: parseSiValue(high_limit_raw),
-          low_limit_raw,
-          low_limit: parseSiValue(low_limit_raw),
+        const loLine = (lines[j] ?? '').trimEnd();
+        low_limit_raw = loLine.replace(/^Low Limit:\s*/i, '').trim();
+        j++;
+
+        const unitLine = (lines[j] ?? '').trimEnd();
+        const unitMatch = unitLine.match(/\bin\s+(FARADS|OHMS)\b/i);
+        if (unitMatch) {
+          unit = unitMatch[1].toUpperCase();
+          error_type = 'analog';
+        } else {
+          unit = unitLine.trim();
+          error_type = 'unknown';
+        }
+        j++;
+      }
+
+      // Deduplicate by location (keep first occurrence)
+      if (!errorMap.has(location)) {
+        errorMap.set(location, {
+          error_type,
+          location,
+          subtest,
+          part_spec,
           unit,
+          measured_raw,
+          nominal_raw,
+          high_limit_raw,
+          low_limit_raw,
+          threshold_raw,
         });
       }
     }
@@ -228,20 +259,18 @@ export function parseLog(filename: string, content: string): ParsedTest {
   }
 
   return {
-    board_id,
+    serial_number,
     product_id,
-    family: meta['family'] ?? '',
-    part_number,
-    revision,
-    mac_address: meta['mac'] ?? '',
-    result: result ?? 'FAIL',
+    product_name: meta['family'] ?? '',
+    rev,
+    mac_address:  meta['mac'] ?? '',
+    result:       result ?? 'FAIL',
     start_time,
     end_time,
-    operator_id: meta['operator id'] ?? '',
-    tester: meta['tester'] ?? '',
-    fixture_id: meta['fixture_id'] ?? '',
-    testplan: meta['testplan'] ?? '',
-    platform: meta['pf'] ?? '',
-    errors: Array.from(errorMap.values()),
+    operator_id:  meta['operator id'] ?? '',
+    tester:       meta['tester'] ?? '',
+    fixture_id:   meta['fixture_id'] ?? '',
+    source_file:  filename,
+    errors:       Array.from(errorMap.values()),
   };
 }

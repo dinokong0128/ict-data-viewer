@@ -1,0 +1,66 @@
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:13:33 2026
+----------------------------------------
+r01 HAS FAILED
+R01=22.1 Part# PART-REDACTED-003
+Measured:   23.290
+Nominal:    22.100
+High Limit: 23.083
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r02 HAS FAILED
+R02=22.1 Part# PART-REDACTED-003
+Measured:   26.342
+Nominal:    22.100
+High Limit: 25.415
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000002
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:13:33 2026
+----------------------------------------
+r01 HAS FAILED
+R01=22.1 Part# PART-REDACTED-003
+Measured:   23.290
+Nominal:    22.100
+High Limit: 23.083
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r02 HAS FAILED
+R02=22.1 Part# PART-REDACTED-003
+Measured:   26.342
+Nominal:    22.100
+High Limit: 25.415
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000002
+&v2S Family: Test Product A
+&v2S Serial #:PROD-001+SN-XXXX-000002
+&v2S ############################
+&v2S #### BOARD ICT PASS  #####
+&v2S ############################
+&v1S Testplan-Released-01-01-2025
+&v2S ST:260312131259
+&v2S ET:260312131423
+&v2S SN:PROD-001+SN-XXXX-000002
+&v2S P/N:PART-REDACTED-001 Rev:13
+&v3S Mac:020000000002
+&v2S Mac_FruID:020000000002
+&v2S u01 CRC Blank:Pass
+&v2S OPERATOR ID:operator-02
+&v2S PF:Agilent3070 Rev:8.30
+&v3S Fixture_ID: fixture-02
+&v2S TESTER:tester-02
+&v2S ***************************
+
+*

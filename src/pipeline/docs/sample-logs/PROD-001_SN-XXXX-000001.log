@@ -1,0 +1,50 @@
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:11:19 2026
+----------------------------------------
+c01 HAS FAILED
+C01=1UF Part# PART-REDACTED-002
+Measured:   0.78327u
+Nominal:    1.0000u
+High Limit: 1.2000u
+Low Limit:  0.80000u
+Capacitance in FARADS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000001
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:11:19 2026
+----------------------------------------
+c01 HAS FAILED
+C01=1UF Part# PART-REDACTED-002
+Measured:   0.78327u
+Nominal:    1.0000u
+High Limit: 1.2000u
+Low Limit:  0.80000u
+Capacitance in FARADS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000001
+&v2S Family: Test Product A
+&v2S Serial #:PROD-001+SN-XXXX-000001
+&v2S ############################
+&v2S #### BOARD ICT PASS  #####
+&v2S ############################
+&v1S Testplan-Released-01-01-2025
+&v2S ST:260312131048
+&v2S ET:260312131213
+&v2S SN:PROD-001+SN-XXXX-000001
+&v2S P/N:PART-REDACTED-001 Rev:13
+&v3S Mac:020000000001
+&v2S Mac_FruID:020000000001
+&v2S u01 CRC Blank:Pass
+&v2S OPERATOR ID:operator-01
+&v2S PF:Agilent3070 Rev:8.30
+&v3S Fixture_ID: fixture-01
+&v2S TESTER:tester-01
+&v2S ***************************
+
+*

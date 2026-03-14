@@ -12,16 +12,14 @@ npm test -- --watch      # Watch mode
 npm test -- --coverage   # With coverage report
 ```
 
-`jest.setup.ts` sets a default `SHEET_ID=test-sheet-id` for all tests.
-
 ## Patterns
 
 ```typescript
 // Unit test for utility function
-describe('sheet helpers', () => {
-  it('normalizes and infers columns', () => {
-    expect(normalize('  Sn ')).toBe('sn');
-    expect(inferColumn('Tester Name')).toBe('tester');
+describe('testUtils helpers', () => {
+  it('groups records by date', () => {
+    const map = groupByDate(records);
+    expect(map.get('2026-03-12')).toBe(2);
   });
 });
 
@@ -43,4 +41,4 @@ it('calls handler on change', () => {
 ## Troubleshooting Tests
 
 - **Tests failing to start:** run `npm install` to restore dev dependencies
-- **`SHEET_ID` missing:** confirm `jest.setup.ts` is listed in `jest.config.js` `setupFilesAfterFramework`
+- **Fetch mock errors:** ensure `global.fetch` is mocked before rendering components that call `/api/tests`

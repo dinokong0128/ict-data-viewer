@@ -15,8 +15,10 @@
 3. Update `ChartPanel` to handle the new type
 4. Add tests
 
-## Adding a New Column Mapping
+## Adding a New Table Column
 
-1. Add aliases to `columnAliases` in `lib/sheet.ts`
-2. Reference `mapping.newColumn` in components as needed
-3. Add tests for the new column detection
+1. Add the field to `TestRecord` in `src/lib/testUtils.ts`
+2. Update the Supabase query in `src/app/api/tests/route.ts` to select the new field
+3. Update the fixture join in the same route's guest-fixture path
+4. Add the column header and cell in `src/components/DetailTable.tsx`
+5. Add tests

@@ -1,0 +1,257 @@
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:11 2026
+----------------------------------------
+c02 HAS FAILED
+C02=2.2UF Part# PART-REDACTED-006
+Measured:   2.1509u
+Nominal:    1.6000u
+High Limit: 2.0800u
+Low Limit:  1.2800u
+Capacitance in FARADS
+----------------------------------------
+c03 HAS FAILED
+C03=560PF Part# PART-REDACTED-005
+Measured:   233.26p
+Nominal:    560.00p
+High Limit: 700.00p
+Low Limit:  308.00p
+Capacitance in FARADS
+----------------------------------------
+r02 HAS FAILED
+R02=22.1 Part# PART-REDACTED-003
+Measured:   33.353
+Nominal:    22.100
+High Limit: 25.415
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r03 HAS FAILED
+R03=10 Part# PART-REDACTED-004
+Measured:   11.138
+Nominal:    10.000
+High Limit: 10.646
+Low Limit:  9.5240
+Resistance in OHMS
+----------------------------------------
+r07 HAS FAILED
+R07=49.9 Part# PART-REDACTED-007
+Measured:   21.441
+Nominal:    16.900
+High Limit: 20.280
+Low Limit:  15.210
+Resistance in OHMS
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5612M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+r09 HAS FAILED
+R09=22.1 Part# PART-REDACTED-003
+Measured:   31.217
+Nominal:    22.100
+High Limit: 24.310
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r10 HAS FAILED
+R10=33.2 Part# PART-REDACTED-009
+Measured:   36.499
+Nominal:    33.200
+High Limit: 34.518
+Low Limit:  32.051
+Resistance in OHMS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000004
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:11 2026
+----------------------------------------
+c02 HAS FAILED
+C02=2.2UF Part# PART-REDACTED-006
+Measured:   2.1509u
+Nominal:    1.6000u
+High Limit: 2.0800u
+Low Limit:  1.2800u
+Capacitance in FARADS
+----------------------------------------
+c03 HAS FAILED
+C03=560PF Part# PART-REDACTED-005
+Measured:   233.26p
+Nominal:    560.00p
+High Limit: 700.00p
+Low Limit:  308.00p
+Capacitance in FARADS
+----------------------------------------
+r02 HAS FAILED
+R02=22.1 Part# PART-REDACTED-003
+Measured:   33.353
+Nominal:    22.100
+High Limit: 25.415
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r03 HAS FAILED
+R03=10 Part# PART-REDACTED-004
+Measured:   11.138
+Nominal:    10.000
+High Limit: 10.646
+Low Limit:  9.5240
+Resistance in OHMS
+----------------------------------------
+r07 HAS FAILED
+R07=49.9 Part# PART-REDACTED-007
+Measured:   21.441
+Nominal:    16.900
+High Limit: 20.280
+Low Limit:  15.210
+Resistance in OHMS
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5612M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+r09 HAS FAILED
+R09=22.1 Part# PART-REDACTED-003
+Measured:   31.217
+Nominal:    22.100
+High Limit: 24.310
+Low Limit:  21.287
+Resistance in OHMS
+----------------------------------------
+r10 HAS FAILED
+R10=33.2 Part# PART-REDACTED-009
+Measured:   36.499
+Nominal:    33.200
+High Limit: 34.518
+Low Limit:  32.051
+Resistance in OHMS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000004
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:23 2026
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5674M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000004
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:23 2026
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5674M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000004
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:27 2026
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5547M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000004
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:27 2026
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5547M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-001+SN-XXXX-000004
+----------------------------------------
+TestPlan-A-v4.1
+Thu Mar 12 13:12:30 2026
+----------------------------------------
+r08 HAS FAILED
+R08=20K Part# PART-REDACTED-008
+Measured:   1.5545M
+Nominal:    20.000k
+High Limit: 20.806k
+Low Limit:  19.046k
+Resistance in OHMS
+----------------------------------------
+DEVICES IN PARALLEL
+c04 220p
+----------------------------------------
+Serial #: PROD-001+SN-XXXX-000004
+&v1S Family: Test Product A
+&v1S Serial #:PROD-001+SN-XXXX-000004
+&v1S ############################
+&v1S ##### BOARD ICT FAIL #####
+&v1S ############################
+&v1S Testplan-Released-01-01-2025
+&v1S ST:260312131138
+&v1S ET:260312131230
+&v1S SN:PROD-001+SN-XXXX-000004
+&v1S P/N:PART-REDACTED-001 Rev:13
+&v3S Mac:020000000004
+&v1S Mac_FruID:
+&v1S u01 CRC Blank:not test
+&v3S OPERATOR ID:operator-05
+&v1S PF:Agilent3070 Rev:8.30
+&v3S Fixture_ID: fixture-03
+&v1S TESTER:tester-03
+&v1S ****************************
+
+*
+

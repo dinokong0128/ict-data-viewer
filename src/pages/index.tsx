@@ -5,20 +5,17 @@ import { FilterPanel } from '@/components/FilterPanel';
 import { StatusBanner } from '@/components/StatusBanner';
 import {
   buildErrorCounts,
-  buildState,
   buildSummary,
   buildUtilization,
-  fetchAllSheetData,
-  filterRowsByRange,
+  filterByRange,
   formatDate,
   getCategoryOptions,
+  getDateKey,
   groupByDate,
-  SHEET_ID,
-  type SheetRow,
-  type SheetState,
-  type UtilizationEntry
-} from '@/lib/sheet';
-import { generateSampleData } from '@/lib/sampleData';
+  type TestRecord,
+  type UtilizationEntry,
+} from '@/lib/testUtils';
+
 const PAGE_SIZE = 12;
 
 type ChartConfig = {
@@ -27,10 +24,18 @@ type ChartConfig = {
   chartType: 'bar' | 'line';
 };
 
+type MetricToField = Record<string, 'tester' | 'fixture_id' | 'operator_id'>;
+const METRIC_FIELD: MetricToField = {
+  tester:   'tester',
+  fixture:  'fixture_id',
+  operator: 'operator_id',
+};
+
 export default function HomePage() {
-  const [sheetState, setSheetState] = useState<SheetState | null>(null);
+  const [records, setRecords] = useState<TestRecord[]>([]);
+  const [demoMode, setDemoMode] = useState(false);
   const [status, setStatus] = useState<string | null>('Loading data...');
-  const [rangePreset, setRangePreset] = useState('7');
+  const [rangePreset, setRangePreset] = useState('30');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [metric, setMetric] = useState('boards');
@@ -39,44 +44,24 @@ export default function HomePage() {
   const [categorySelection, setCategorySelection] = useState('top');
   const [selectedErrors, setSelectedErrors] = useState<Set<string>>(new Set());
 
-  const [demoMode, setDemoMode] = useState(false);
-
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (start: string, end: string) => {
+    if (!start || !end) return;
     try {
       setStatus('Loading data...');
-      if (!SHEET_ID) {
-        const sample = generateSampleData();
-        const nextState = buildState(sample);
-        setSheetState(nextState);
-        setDemoMode(true);
-        setStatus(null);
-        return;
+      const res = await fetch(`/api/tests?start=${start}&end=${end}`);
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string };
+        throw new Error(body.error ?? `HTTP ${res.status}`);
       }
-      const result = await fetchAllSheetData();
-      const nextState = buildState(result);
-      setSheetState(nextState);
-      setDemoMode(false);
+      const body = (await res.json()) as { records: TestRecord[]; demo: boolean };
+      setRecords(body.records);
+      setDemoMode(body.demo);
       setStatus(null);
-    } catch (error) {
-      // If live fetch fails, fall back to sample data so the app still works
-      try {
-        const sample = generateSampleData();
-        const nextState = buildState(sample);
-        setSheetState(nextState);
-        setDemoMode(true);
-        setStatus(
-          `Live data failed: ${error instanceof Error ? error.message : 'Unknown error'}. Showing demo data.`
-        );
-      } catch {
-        setStatus(error instanceof Error ? error.message : 'Unable to load data.');
-        setSheetState(null);
-      }
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Unable to load data.');
+      setRecords([]);
     }
   }, []);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
 
   useEffect(() => {
     const rangeDays = Number(rangePreset);
@@ -84,66 +69,51 @@ export default function HomePage() {
       const today = new Date();
       const start = new Date(today);
       start.setDate(start.getDate() - (rangeDays - 1));
-      setStartDate(formatDate(start));
-      setEndDate(formatDate(today));
+      const s = formatDate(start);
+      const e = formatDate(today);
+      setStartDate(s);
+      setEndDate(e);
+      void loadData(s, e);
     }
-  }, [rangePreset]);
+  }, [rangePreset, loadData]);
 
   const activeRange = useMemo(() => {
-    if (!startDate || !endDate) {
-      return null;
-    }
-    const start = new Date(startDate + 'T00:00:00');
-    const end = new Date(endDate + 'T23:59:59.999');
-    return { start, end };
+    if (!startDate || !endDate) return null;
+    return {
+      start: new Date(startDate + 'T00:00:00'),
+      end:   new Date(endDate   + 'T23:59:59.999'),
+    };
   }, [startDate, endDate]);
 
   const rowsInRange = useMemo(() => {
-    if (!sheetState || !activeRange) {
-      return [] as SheetRow[];
-    }
-    return filterRowsByRange(sheetState.rows, activeRange.start, activeRange.end);
-  }, [sheetState, activeRange]);
+    if (!activeRange) return [] as TestRecord[];
+    return filterByRange(records, activeRange.start, activeRange.end);
+  }, [records, activeRange]);
 
   const categoryOptions = useMemo(() => {
-    if (!sheetState || !rowsInRange.length) {
-      return [];
-    }
-    if (metric === 'tester' && sheetState.mapping.tester !== undefined) {
-      return getCategoryOptions(rowsInRange, sheetState.mapping.tester);
-    }
-    if (metric === 'fixture' && sheetState.mapping.fixture !== undefined) {
-      return getCategoryOptions(rowsInRange, sheetState.mapping.fixture);
-    }
-    if (metric === 'operator' && sheetState.mapping.operator !== undefined) {
-      return getCategoryOptions(rowsInRange, sheetState.mapping.operator);
-    }
-    return [];
-  }, [sheetState, rowsInRange, metric]);
+    if (!rowsInRange.length) return [];
+    const field = METRIC_FIELD[metric];
+    if (!field) return [];
+    return getCategoryOptions(rowsInRange, field);
+  }, [rowsInRange, metric]);
 
   const errorInfo = useMemo(() => {
-    if (!rowsInRange.length) {
-      return { errors: [], counts: new Map<string, number>() };
-    }
+    if (!rowsInRange.length) return { errors: [], counts: new Map<string, number>() };
     return buildErrorCounts(rowsInRange);
   }, [rowsInRange]);
 
   const utilizationData = useMemo<UtilizationEntry[]>(() => {
-    if (!sheetState || !rowsInRange.length || sheetState.mapping.tester === undefined) {
-      return [];
-    }
-    return buildUtilization(rowsInRange, sheetState.mapping.tester);
-  }, [sheetState, rowsInRange]);
+    if (!rowsInRange.length) return [];
+    return buildUtilization(rowsInRange);
+  }, [rowsInRange]);
 
   const summaryItems = useMemo(() => {
-    if (!sheetState || !rowsInRange.length) {
-      return [];
-    }
+    if (!rowsInRange.length) return [];
     if (metric === 'utilization' && utilizationData.length) {
       const total = utilizationData.reduce((sum, u) => sum + u.count, 0);
       const items = [
         `Total tests: ${total}`,
-        `Active testers: ${utilizationData.length}`
+        `Active testers: ${utilizationData.length}`,
       ];
       utilizationData.slice(0, 5).forEach((u) => {
         const pct = total > 0 ? Math.round((u.count / total) * 100) : 0;
@@ -151,13 +121,11 @@ export default function HomePage() {
       });
       return items;
     }
-    return buildSummary(rowsInRange, sheetState.mapping);
-  }, [sheetState, rowsInRange, metric, utilizationData]);
+    return buildSummary(rowsInRange);
+  }, [rowsInRange, metric, utilizationData]);
 
   const chartConfig = useMemo<ChartConfig>(() => {
-    if (!rowsInRange.length) {
-      return { labels: [], datasets: [], chartType: 'bar' };
-    }
+    if (!rowsInRange.length) return { labels: [], datasets: [], chartType: 'bar' };
 
     const labels = Array.from(groupByDate(rowsInRange).keys()).sort();
 
@@ -165,14 +133,8 @@ export default function HomePage() {
       const counts = groupByDate(rowsInRange);
       return {
         labels,
-        datasets: [
-          {
-            label: 'Boards tested',
-            data: labels.map((label) => counts.get(label) || 0),
-            backgroundColor: 'rgba(37, 99, 235, 0.7)'
-          }
-        ],
-        chartType: 'bar'
+        datasets: [{ label: 'Boards tested', data: labels.map((l) => counts.get(l) ?? 0), backgroundColor: 'rgba(37, 99, 235, 0.7)' }],
+        chartType: 'bar',
       };
     }
 
@@ -180,106 +142,55 @@ export default function HomePage() {
       const palette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#6366f1', '#8b5cf6', '#ec4899', '#14b8a6'];
       return {
         labels: utilizationData.map((u) => u.tester),
-        datasets: [
-          {
-            label: 'Boards tested',
-            data: utilizationData.map((u) => u.count),
-            backgroundColor: utilizationData.map((_, i) => palette[i % palette.length])
-          }
-        ],
-        chartType: 'bar'
+        datasets: [{ label: 'Boards tested', data: utilizationData.map((u) => u.count), backgroundColor: utilizationData.map((_, i) => palette[i % palette.length]) }],
+        chartType: 'bar',
       };
     }
 
     if (metric === 'errors') {
-      const selected = selectedErrors.size === 0 ? errorInfo.errors : errorInfo.errors.filter((error) => selectedErrors.has(error));
+      const selected = selectedErrors.size === 0 ? errorInfo.errors : errorInfo.errors.filter((e) => selectedErrors.has(e));
       const data = labels.map((label) =>
-        selected.reduce((sum, error) => sum + (errorInfo.counts.get(`${label}::${error}`) || 0), 0)
+        selected.reduce((sum, error) => sum + (errorInfo.counts.get(`${label}::${error}`) ?? 0), 0)
       );
       return {
         labels,
-        datasets: [
-          {
-            label: selected.length ? `Errors (${selected.length} types)` : 'Errors',
-            data,
-            borderColor: '#ef4444',
-            backgroundColor: 'rgba(239, 68, 68, 0.4)'
-          }
-        ],
-        chartType: 'line'
+        datasets: [{ label: selected.length ? `Errors (${selected.length} types)` : 'Errors', data, borderColor: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.4)' }],
+        chartType: 'line',
       };
     }
 
-    if (!categoryOptions.length) {
-      return { labels, datasets: [], chartType: 'bar' };
-    }
+    const field = METRIC_FIELD[metric];
+    if (!field || !categoryOptions.length) return { labels, datasets: [], chartType: 'bar' };
 
     if (categorySelection !== 'top' && categoryOptions.includes(categorySelection)) {
       const data = labels.map((label) =>
-        rowsInRange.filter((row) => row.dateKey === label && String(row.raw[sheetState?.mapping[metric] ?? 0]) === categorySelection).length
+        rowsInRange.filter((r) => getDateKey(r) === label && r[field] === categorySelection).length
       );
       return {
         labels,
-        datasets: [
-          {
-            label: categorySelection,
-            data,
-            backgroundColor: 'rgba(37, 99, 235, 0.7)'
-          }
-        ],
-        chartType: 'bar'
+        datasets: [{ label: categorySelection, data, backgroundColor: 'rgba(37, 99, 235, 0.7)' }],
+        chartType: 'bar',
       };
     }
 
     const palette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#6366f1'];
-    const datasets = categoryOptions.slice(0, 5).map((category, index) => {
-      const data = labels.map((label) =>
-        rowsInRange.filter((row) => row.dateKey === label && String(row.raw[sheetState?.mapping[metric] ?? 0]) === category).length
-      );
-      return {
-        label: category,
-        data,
-        backgroundColor: palette[index % palette.length],
-        stack: 'categories'
-      };
-    });
-
+    const datasets = categoryOptions.slice(0, 5).map((cat, idx) => ({
+      label: cat,
+      data: labels.map((label) => rowsInRange.filter((r) => getDateKey(r) === label && r[field] === cat).length),
+      backgroundColor: palette[idx % palette.length],
+      stack: 'categories',
+    }));
     return { labels, datasets, chartType: 'bar' };
-  }, [rowsInRange, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, sheetState, utilizationData]);
+  }, [rowsInRange, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, utilizationData]);
 
   const tableRows = useMemo(() => {
-    if (!rowsInRange.length) {
-      return [];
+    if (!rowsInRange.length) return [] as TestRecord[];
+    if (!selectedDate) return rowsInRange;
+    if (metric === 'utilization') {
+      return rowsInRange.filter((r) => r.tester === selectedDate);
     }
-    if (!selectedDate) {
-      return rowsInRange;
-    }
-    if (metric === 'utilization' && sheetState?.mapping.tester !== undefined) {
-      return rowsInRange.filter(
-        (row) => String(row.raw[sheetState.mapping.tester] ?? '') === selectedDate
-      );
-    }
-    return rowsInRange.filter((row) => row.dateKey === selectedDate);
-  }, [rowsInRange, selectedDate, metric, sheetState]);
-
-  const tableColumns = useMemo(() => {
-    if (!sheetState) {
-      return [] as Array<{ index: number; label: string }>;
-    }
-    const indexes = [
-      sheetState.dateColumn,
-      sheetState.mapping.sn,
-      sheetState.mapping.mac,
-      sheetState.mapping.family,
-      sheetState.mapping.pn,
-      sheetState.mapping.tester,
-      sheetState.mapping.operator,
-      sheetState.mapping.fixture,
-      sheetState.mapping.other,
-      sheetState.mapping.result
-    ].filter((value): value is number => value !== undefined);
-    return Array.from(new Set(indexes)).map((index) => ({ index, label: sheetState.columns[index] }));
-  }, [sheetState]);
+    return rowsInRange.filter((r) => getDateKey(r) === selectedDate);
+  }, [rowsInRange, selectedDate, metric]);
 
   const tableTitle = selectedDate
     ? metric === 'utilization'
@@ -287,38 +198,32 @@ export default function HomePage() {
       : `Details for ${selectedDate} (${tableRows.length} rows)`
     : `Details for selected range (${tableRows.length} rows)`;
 
-  const statusMessage = status || (rowsInRange.length === 0 && sheetState ? 'No rows match the selected range.' : null);
+  const statusMessage =
+    status ??
+    (rowsInRange.length === 0 && records.length > 0 ? 'No records match the selected range.' : null);
 
   return (
     <main>
       <header>
         <div>
           <h1>ICT Data Viewer</h1>
-          <p>Visualize tester output from the Google Sheet without downloading data locally.</p>
+          <p>Visualize ICT board test results from Supabase.</p>
           {demoMode && (
             <p style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-              Demo mode: Showing generated sample data. Set SHEET_ID to load real data.
+              Demo mode: Showing guest fixture data. Set SUPABASE_URL to load real data.
             </p>
           )}
         </div>
       </header>
 
       <FilterPanel
-        onReload={loadData}
+        onReload={() => void loadData(startDate, endDate)}
         rangePreset={rangePreset}
-        onRangePresetChange={(value) => {
-          setRangePreset(value);
-        }}
+        onRangePresetChange={(value) => { setRangePreset(value); }}
         startDate={startDate}
         endDate={endDate}
-        onStartDateChange={(value) => {
-          setStartDate(value);
-          setRangePreset('custom');
-        }}
-        onEndDateChange={(value) => {
-          setEndDate(value);
-          setRangePreset('custom');
-        }}
+        onStartDateChange={(value) => { setStartDate(value); setRangePreset('custom'); }}
+        onEndDateChange={(value) => { setEndDate(value); setRangePreset('custom'); }}
         metric={metric}
         onMetricChange={(value) => {
           setMetric(value);
@@ -333,11 +238,7 @@ export default function HomePage() {
         selectedErrors={selectedErrors}
         onErrorToggle={(value) => {
           const next = new Set(selectedErrors);
-          if (next.has(value)) {
-            next.delete(value);
-          } else {
-            next.add(value);
-          }
+          if (next.has(value)) { next.delete(value); } else { next.add(value); }
           setSelectedErrors(next);
         }}
       />
@@ -349,10 +250,7 @@ export default function HomePage() {
           labels={chartConfig.labels}
           datasets={chartConfig.datasets}
           chartType={chartConfig.chartType}
-          onSelectDate={(label) => {
-            setSelectedDate(label);
-            setPage(1);
-          }}
+          onSelectDate={(label) => { setSelectedDate(label); setPage(1); }}
         />
         <div className="card">
           <h2>{metric === 'utilization' ? 'Utilization summary' : 'Range summary'}</h2>
@@ -366,7 +264,6 @@ export default function HomePage() {
 
       <DetailTable
         rows={tableRows}
-        columns={tableColumns}
         page={page}
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
@@ -374,7 +271,7 @@ export default function HomePage() {
       />
 
       <footer>
-        Data source: Google Sheets. The app reads the sheet live and does not persist any data locally.
+        Data source: Supabase. The app reads test records live.
       </footer>
     </main>
   );
