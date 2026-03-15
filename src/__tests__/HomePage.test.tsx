@@ -28,7 +28,7 @@ jest.mock('next/router', () => ({
 
 // Mock supabase-browser (sign-out only used in logout handler)
 jest.mock('@/lib/supabase-browser', () => ({
-  supabaseBrowser: { auth: { signOut: jest.fn().mockResolvedValue({}) } },
+  getSupabaseBrowser: () => ({ auth: { signOut: jest.fn().mockResolvedValue({}) } }),
 }));
 
 // Build a record dated within the last 30 days (default range)

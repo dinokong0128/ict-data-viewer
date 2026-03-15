@@ -6,9 +6,16 @@
  * For server-side admin operations, see ict-db.ts (service role key).
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? '';
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+let _instance: SupabaseClient | null = null;
 
-export const supabaseBrowser = createClient(url, anon);
+/** Returns the browser-side Supabase singleton (created on first call). */
+export function getSupabaseBrowser(): SupabaseClient {
+  if (!_instance) {
+    const url  = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? '';
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '';
+    _instance = createClient(url, anon);
+  }
+  return _instance;
+}

@@ -20,7 +20,7 @@ import React, {
   useState,
 } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
-import { supabaseBrowser } from '@/lib/supabase-browser';
+import { getSupabaseBrowser } from '@/lib/supabase-browser';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -83,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchRole = useCallback(async () => {
-    const { data, error } = await supabaseBrowser.rpc('get_my_role');
+    const { data, error } = await getSupabaseBrowser().rpc('get_my_role');
     if (!error && data) {
       setRole(data as AppRole);
     } else {
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Restore existing session on mount
-    void supabaseBrowser.auth.getSession().then(({ data: { session: s } }) => {
+    void getSupabaseBrowser().auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       setIsGuest(!s && isGuestStored());
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Subscribe to future auth state changes
-    const { data: { subscription } } = supabaseBrowser.auth.onAuthStateChange(
+    const { data: { subscription } } = getSupabaseBrowser().auth.onAuthStateChange(
       (_event, s) => {
         setSession(s);
         setUser(s?.user ?? null);

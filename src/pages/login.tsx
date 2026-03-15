@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { supabaseBrowser } from '@/lib/supabase-browser';
+import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import { clearGuestMode, setGuestMode, useAuth } from '@/lib/auth-context';
 
 export default function LoginPage() {
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setPending(true);
     setError(null);
 
-    const { error: authError } = await supabaseBrowser.auth.signInWithPassword({
+    const { error: authError } = await getSupabaseBrowser().auth.signInWithPassword({
       email: email.trim(),
       password,
     });

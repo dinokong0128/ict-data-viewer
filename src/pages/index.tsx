@@ -5,7 +5,7 @@ import { DetailTable } from '@/components/DetailTable';
 import { FilterPanel } from '@/components/FilterPanel';
 import { StatusBanner } from '@/components/StatusBanner';
 import { clearGuestMode, useAuth } from '@/lib/auth-context';
-import { supabaseBrowser } from '@/lib/supabase-browser';
+import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import {
   buildErrorCounts,
   buildSummary,
@@ -88,7 +88,7 @@ export default function HomePage() {
   }, [rangePreset, loadData]);
 
   async function handleLogout() {
-    await supabaseBrowser.auth.signOut();
+    await getSupabaseBrowser().auth.signOut();
     clearGuestMode();
     void router.push('/login');
   }
