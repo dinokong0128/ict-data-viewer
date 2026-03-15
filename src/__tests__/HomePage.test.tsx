@@ -13,6 +13,24 @@ jest.mock('@/components/DetailTable', () => ({
   DetailTable: ({ title }: { title: string }) => <div>{title}</div>,
 }));
 
+const mockUseAuth = jest.fn();
+
+// Mock auth-context — default: authenticated, ict-manager role
+jest.mock('@/lib/auth-context', () => ({
+  useAuth: () => mockUseAuth(),
+  clearGuestMode: jest.fn(),
+}));
+
+// Mock next/router
+jest.mock('next/router', () => ({
+  useRouter: () => ({ pathname: '/', replace: jest.fn(), push: jest.fn() }),
+}));
+
+// Mock supabase-browser (sign-out only used in logout handler)
+jest.mock('@/lib/supabase-browser', () => ({
+  supabaseBrowser: { auth: { signOut: jest.fn().mockResolvedValue({}) } },
+}));
+
 // Build a record dated within the last 30 days (default range)
 const yesterday = new Date();
 yesterday.setDate(yesterday.getDate() - 1);
@@ -39,6 +57,14 @@ const MOCK_RECORD: TestRecord = {
 };
 
 beforeEach(() => {
+  mockUseAuth.mockReturnValue({
+    session:   { access_token: 'test-jwt' },
+    user:      { id: 'user-1' },
+    role:      'ict-manager',
+    isGuest:   false,
+    isLoading: false,
+  });
+
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ records: [MOCK_RECORD], demo: false }),
@@ -62,16 +88,41 @@ describe('HomePage', () => {
     });
   });
 
-  it('shows demo banner when API returns demo:true', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ records: [MOCK_RECORD], demo: true }),
+  it('sends Authorization header when session is present', async () => {
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    const [, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect((options?.headers as Record<string, string>)?.['Authorization']).toBe('Bearer test-jwt');
+  });
+
+  it('shows guest banner when isGuest is true', async () => {
+    mockUseAuth.mockReturnValue({
+      session: null, user: null, role: null, isGuest: true, isLoading: false,
     });
 
     render(<HomePage />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Demo mode/i)).toBeInTheDocument();
+      expect(screen.getByText(/Guest mode/i)).toBeInTheDocument();
     });
+  });
+
+  it('does not send Authorization header for guests', async () => {
+    mockUseAuth.mockReturnValue({
+      session: null, user: null, role: null, isGuest: true, isLoading: false,
+    });
+
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    const [, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+    expect((options?.headers as Record<string, string>)?.['Authorization']).toBeUndefined();
   });
 });

@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { ChartPanel, type ChartDataset } from '@/components/ChartPanel';
 import { DetailTable } from '@/components/DetailTable';
 import { FilterPanel } from '@/components/FilterPanel';
 import { StatusBanner } from '@/components/StatusBanner';
+import { clearGuestMode, useAuth } from '@/lib/auth-context';
+import { supabaseBrowser } from '@/lib/supabase-browser';
 import {
   buildErrorCounts,
   buildSummary,
@@ -32,8 +35,10 @@ const METRIC_FIELD: MetricToField = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
+  const { session, role, isGuest } = useAuth();
+
   const [records, setRecords] = useState<TestRecord[]>([]);
-  const [demoMode, setDemoMode] = useState(false);
   const [status, setStatus] = useState<string | null>('Loading data...');
   const [rangePreset, setRangePreset] = useState('30');
   const [startDate, setStartDate] = useState('');
@@ -48,20 +53,25 @@ export default function HomePage() {
     if (!start || !end) return;
     try {
       setStatus('Loading data...');
-      const res = await fetch(`/api/tests?start=${start}&end=${end}`);
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch(`/api/tests?start=${start}&end=${end}`, { headers });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const body = (await res.json()) as { records: TestRecord[]; demo: boolean };
       setRecords(body.records);
-      setDemoMode(body.demo);
       setStatus(null);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : 'Unable to load data.');
       setRecords([]);
     }
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     const rangeDays = Number(rangePreset);
@@ -76,6 +86,12 @@ export default function HomePage() {
       void loadData(s, e);
     }
   }, [rangePreset, loadData]);
+
+  async function handleLogout() {
+    await supabaseBrowser.auth.signOut();
+    clearGuestMode();
+    void router.push('/login');
+  }
 
   const activeRange = useMemo(() => {
     if (!startDate || !endDate) return null;
@@ -202,16 +218,47 @@ export default function HomePage() {
     status ??
     (rowsInRange.length === 0 && records.length > 0 ? 'No records match the selected range.' : null);
 
+  // Show AI chat entry point for ict-manager and ict-admin only.
+  // TODO: implement AI chat feature here — replace the placeholder below.
+  const showAiChat = !isGuest && role !== null && role !== 'ict-member';
+
   return (
     <main>
       <header>
         <div>
           <h1>ICT Data Viewer</h1>
           <p>Visualize ICT board test results from Supabase.</p>
-          {demoMode && (
+          {isGuest && (
             <p style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-              Demo mode: Showing guest fixture data. Set SUPABASE_URL to load real data.
+              Guest mode: Showing demo fixture data.{' '}
+              <a href="/login" style={{ color: '#f59e0b' }}>Sign in</a> for live data.
             </p>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {/* TODO: AI chat entry point — place chat button/panel here.
+              Visible to ict-manager and ict-admin only (see showAiChat flag). */}
+          {showAiChat && (
+            <span style={{ fontSize: '13px', color: '#6b7280' }}>{/* AI chat placeholder */}</span>
+          )}
+
+          {!isGuest && (
+            <button
+              type="button"
+              onClick={() => { void handleLogout(); }}
+              style={{
+                background: 'none',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                color: '#4b5563',
+              }}
+            >
+              Log out
+            </button>
           )}
         </div>
       </header>
@@ -271,7 +318,7 @@ export default function HomePage() {
       />
 
       <footer>
-        Data source: Supabase. The app reads test records live.
+        Data source: {isGuest ? 'Demo fixture data' : 'Supabase'}. The app reads test records live.
       </footer>
     </main>
   );
