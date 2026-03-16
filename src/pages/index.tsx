@@ -8,7 +8,6 @@ import { clearGuestMode, useAuth } from '@/lib/auth-context';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
 import {
   buildErrorCounts,
-  buildSummary,
   buildUtilization,
   filterByRange,
   formatDate,
@@ -34,6 +33,8 @@ const METRIC_FIELD: MetricToField = {
   operator: 'operator_id',
 };
 
+type SummaryFilter = 'pass' | 'fail' | 'boards' | null;
+
 export default function HomePage() {
   const router = useRouter();
   const { session, role, isGuest } = useAuth();
@@ -48,6 +49,7 @@ export default function HomePage() {
   const [page, setPage] = useState(1);
   const [categorySelection, setCategorySelection] = useState('top');
   const [selectedErrors, setSelectedErrors] = useState<Set<string>>(new Set());
+  const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>(null);
 
   const loadData = useCallback(async (start: string, end: string) => {
     if (!start || !end) return;
@@ -83,6 +85,7 @@ export default function HomePage() {
       const e = formatDate(today);
       setStartDate(s);
       setEndDate(e);
+      setSummaryFilter(null);
       void loadData(s, e);
     }
   }, [rangePreset, loadData]);
@@ -107,6 +110,21 @@ export default function HomePage() {
     return filterByRange(records, activeRange.start, activeRange.end);
   }, [records, activeRange]);
 
+  const filteredRows = useMemo(() => {
+    if (!summaryFilter) return rowsInRange;
+    if (summaryFilter === 'pass') return rowsInRange.filter((r) => r.result === 'pass');
+    if (summaryFilter === 'fail') return rowsInRange.filter((r) => r.result === 'fail');
+    if (summaryFilter === 'boards') {
+      const seen = new Set<string>();
+      return rowsInRange.filter((r) => {
+        if (seen.has(r.serial_number)) return false;
+        seen.add(r.serial_number);
+        return true;
+      });
+    }
+    return rowsInRange;
+  }, [rowsInRange, summaryFilter]);
+
   const categoryOptions = useMemo(() => {
     if (!rowsInRange.length) return [];
     const field = METRIC_FIELD[metric];
@@ -124,30 +142,49 @@ export default function HomePage() {
     return buildUtilization(rowsInRange);
   }, [rowsInRange]);
 
-  const summaryItems = useMemo(() => {
-    if (!rowsInRange.length) return [];
-    if (metric === 'utilization' && utilizationData.length) {
-      const total = utilizationData.reduce((sum, u) => sum + u.count, 0);
-      const items = [
-        `Total tests: ${total}`,
-        `Active testers: ${utilizationData.length}`,
-      ];
-      utilizationData.slice(0, 5).forEach((u) => {
-        const pct = total > 0 ? Math.round((u.count / total) * 100) : 0;
-        items.push(`${u.tester}: ${u.count} boards (${pct}%, ~${u.perDay}/day)`);
+  // Summary stats (always based on full rowsInRange, not filteredRows)
+  const summaryStats = useMemo(() => {
+    if (!rowsInRange.length) return null;
+    const uniqueBoards = new Set(rowsInRange.map((r) => r.serial_number));
+    const passCount = rowsInRange.filter((r) => r.result === 'pass').length;
+    const failCount = rowsInRange.filter((r) => r.result === 'fail').length;
+
+    const errorCounts: Record<string, number> = {};
+    rowsInRange.forEach((r) => {
+      r.test_errors.forEach((e) => {
+        errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
       });
-      return items;
-    }
-    return buildSummary(rowsInRange);
-  }, [rowsInRange, metric, utilizationData]);
+    });
+    const topErrors = Object.entries(errorCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([loc, count]) => `${loc} (${count})`);
+
+    return { totalTests: rowsInRange.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, topErrors };
+  }, [rowsInRange]);
+
+  // Utilization summary items (for utilization metric)
+  const utilizationSummaryItems = useMemo(() => {
+    if (!utilizationData.length) return [];
+    const total = utilizationData.reduce((sum, u) => sum + u.count, 0);
+    const items = [
+      `Total tests: ${total}`,
+      `Active testers: ${utilizationData.length}`,
+    ];
+    utilizationData.slice(0, 5).forEach((u) => {
+      const pct = total > 0 ? Math.round((u.count / total) * 100) : 0;
+      items.push(`${u.tester}: ${u.count} boards (${pct}%, ~${u.perDay}/day)`);
+    });
+    return items;
+  }, [utilizationData]);
 
   const chartConfig = useMemo<ChartConfig>(() => {
-    if (!rowsInRange.length) return { labels: [], datasets: [], chartType: 'bar' };
+    if (!filteredRows.length) return { labels: [], datasets: [], chartType: 'bar' };
 
-    const labels = Array.from(groupByDate(rowsInRange).keys()).sort();
+    const labels = Array.from(groupByDate(filteredRows).keys()).sort();
 
     if (metric === 'boards') {
-      const counts = groupByDate(rowsInRange);
+      const counts = groupByDate(filteredRows);
       return {
         labels,
         datasets: [{ label: 'Boards tested', data: labels.map((l) => counts.get(l) ?? 0), backgroundColor: 'rgba(37, 99, 235, 0.7)' }],
@@ -181,7 +218,7 @@ export default function HomePage() {
 
     if (categorySelection !== 'top' && categoryOptions.includes(categorySelection)) {
       const data = labels.map((label) =>
-        rowsInRange.filter((r) => getDateKey(r) === label && r[field] === categorySelection).length
+        filteredRows.filter((r) => getDateKey(r) === label && r[field] === categorySelection).length
       );
       return {
         labels,
@@ -193,21 +230,21 @@ export default function HomePage() {
     const palette = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#6366f1'];
     const datasets = categoryOptions.slice(0, 5).map((cat, idx) => ({
       label: cat,
-      data: labels.map((label) => rowsInRange.filter((r) => getDateKey(r) === label && r[field] === cat).length),
+      data: labels.map((label) => filteredRows.filter((r) => getDateKey(r) === label && r[field] === cat).length),
       backgroundColor: palette[idx % palette.length],
       stack: 'categories',
     }));
     return { labels, datasets, chartType: 'bar' };
-  }, [rowsInRange, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, utilizationData]);
+  }, [filteredRows, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, utilizationData]);
 
   const tableRows = useMemo(() => {
-    if (!rowsInRange.length) return [] as TestRecord[];
-    if (!selectedDate) return rowsInRange;
+    if (!filteredRows.length) return [] as TestRecord[];
+    if (!selectedDate) return filteredRows;
     if (metric === 'utilization') {
-      return rowsInRange.filter((r) => r.tester === selectedDate);
+      return filteredRows.filter((r) => r.tester === selectedDate);
     }
-    return rowsInRange.filter((r) => getDateKey(r) === selectedDate);
-  }, [rowsInRange, selectedDate, metric]);
+    return filteredRows.filter((r) => getDateKey(r) === selectedDate);
+  }, [filteredRows, selectedDate, metric]);
 
   const tableTitle = selectedDate
     ? metric === 'utilization'
@@ -223,21 +260,63 @@ export default function HomePage() {
   // TODO: implement AI chat feature here — replace the placeholder below.
   const showAiChat = !isGuest && role !== null && role !== 'ict-member';
 
+  function handleSummaryFilterToggle(filter: NonNullable<SummaryFilter>) {
+    setSummaryFilter((prev) => (prev === filter ? null : filter));
+    setSelectedDate(null);
+    setPage(1);
+  }
+
   return (
     <main>
       <header>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <h1>ICT Data Viewer</h1>
-          <p>Visualize ICT board test results from Supabase.</p>
           {isGuest && (
-            <p style={{ color: '#f59e0b', fontWeight: 'bold' }}>
-              Guest mode: Showing demo fixture data.{' '}
-              <a href="/login" style={{ color: '#f59e0b' }}>Sign in</a> for live data.
-            </p>
+            <span style={{ color: '#f59e0b', fontSize: '12px', fontWeight: 600 }}>
+              Guest mode —{' '}
+              <a href="/login" style={{ color: '#f59e0b' }}>Sign in</a>
+            </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn-reload"
+            title="Reload data"
+            onClick={() => { void loadData(startDate, endDate); }}
+          >
+            ↻
+          </button>
+
+          <FilterPanel
+            onReload={() => void loadData(startDate, endDate)}
+            rangePreset={rangePreset}
+            onRangePresetChange={(value) => { setRangePreset(value); }}
+            startDate={startDate}
+            endDate={endDate}
+            onStartDateChange={(value) => { setStartDate(value); setRangePreset('custom'); }}
+            onEndDateChange={(value) => { setEndDate(value); setRangePreset('custom'); }}
+            metric={metric}
+            onMetricChange={(value) => {
+              setMetric(value);
+              setSelectedDate(null);
+              setCategorySelection('top');
+              setSelectedErrors(new Set());
+              setSummaryFilter(null);
+            }}
+            categoryOptions={categoryOptions}
+            categorySelection={categorySelection}
+            onCategoryChange={setCategorySelection}
+            errorOptions={errorInfo.errors}
+            selectedErrors={selectedErrors}
+            onErrorToggle={(value) => {
+              const next = new Set(selectedErrors);
+              if (next.has(value)) { next.delete(value); } else { next.add(value); }
+              setSelectedErrors(next);
+            }}
+          />
+
           {/* TODO: AI chat entry point — place chat button/panel here.
               Visible to ict-manager and ict-admin only (see showAiChat flag). */}
           {showAiChat && (
@@ -252,7 +331,7 @@ export default function HomePage() {
                 background: 'none',
                 border: '1px solid #e2e8f0',
                 borderRadius: '6px',
-                padding: '6px 12px',
+                padding: '5px 12px',
                 cursor: 'pointer',
                 fontSize: '13px',
                 color: '#4b5563',
@@ -263,33 +342,6 @@ export default function HomePage() {
           )}
         </div>
       </header>
-
-      <FilterPanel
-        onReload={() => void loadData(startDate, endDate)}
-        rangePreset={rangePreset}
-        onRangePresetChange={(value) => { setRangePreset(value); }}
-        startDate={startDate}
-        endDate={endDate}
-        onStartDateChange={(value) => { setStartDate(value); setRangePreset('custom'); }}
-        onEndDateChange={(value) => { setEndDate(value); setRangePreset('custom'); }}
-        metric={metric}
-        onMetricChange={(value) => {
-          setMetric(value);
-          setSelectedDate(null);
-          setCategorySelection('top');
-          setSelectedErrors(new Set());
-        }}
-        categoryOptions={categoryOptions}
-        categorySelection={categorySelection}
-        onCategoryChange={setCategorySelection}
-        errorOptions={errorInfo.errors}
-        selectedErrors={selectedErrors}
-        onErrorToggle={(value) => {
-          const next = new Set(selectedErrors);
-          if (next.has(value)) { next.delete(value); } else { next.add(value); }
-          setSelectedErrors(next);
-        }}
-      />
 
       <StatusBanner message={statusMessage} />
 
@@ -302,11 +354,59 @@ export default function HomePage() {
         />
         <div className="card">
           <h2>{metric === 'utilization' ? 'Utilization summary' : 'Range summary'}</h2>
-          <ul className="summary-list">
-            {summaryItems.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
+          {metric === 'utilization' ? (
+            <ul className="summary-list">
+              {utilizationSummaryItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : summaryStats ? (
+            <ul className="summary-list">
+              <li>
+                Total tests:{' '}
+                <button
+                  type="button"
+                  className={`summary-num${!summaryFilter ? ' summary-num--active' : ''}`}
+                  onClick={() => { setSummaryFilter(null); setSelectedDate(null); setPage(1); }}
+                >
+                  {summaryStats.totalTests}
+                </button>
+              </li>
+              <li>
+                Total # of boards:{' '}
+                <button
+                  type="button"
+                  className={`summary-num${summaryFilter === 'boards' ? ' summary-num--active' : ''}`}
+                  onClick={() => handleSummaryFilterToggle('boards')}
+                >
+                  {summaryStats.uniqueBoardCount}
+                </button>
+              </li>
+              <li>
+                Pass:{' '}
+                <button
+                  type="button"
+                  className={`summary-num${summaryFilter === 'pass' ? ' summary-num--active' : ''}`}
+                  onClick={() => handleSummaryFilterToggle('pass')}
+                >
+                  {summaryStats.passCount}
+                </button>
+                {' | '}
+                Fail:{' '}
+                <button
+                  type="button"
+                  className={`summary-num${summaryFilter === 'fail' ? ' summary-num--active' : ''}`}
+                  onClick={() => handleSummaryFilterToggle('fail')}
+                >
+                  {summaryStats.failCount}
+                </button>
+              </li>
+              <li>
+                Top errors:{' '}
+                {summaryStats.topErrors.length ? summaryStats.topErrors.join(', ') : 'None'}
+              </li>
+            </ul>
+          ) : null}
         </div>
       </section>
 

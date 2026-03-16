@@ -19,7 +19,6 @@ type FilterPanelProps = {
 };
 
 export function FilterPanel({
-  onReload,
   rangePreset,
   onRangePresetChange,
   startDate,
@@ -36,18 +35,12 @@ export function FilterPanel({
   onErrorToggle
 }: FilterPanelProps) {
   return (
-    <section className="section controls">
-      <div className="card control-card">
-        <label>Data source</label>
-        <button type="button" onClick={onReload}>
-          Reload data
-        </button>
-        <p style={{ margin: '8px 0 0', color: '#6b7280' }}>Loading data.</p>
-      </div>
-      <div className="card control-card">
-        <label htmlFor="range-select">Date range</label>
+    <>
+      <span className="header-control-group">
+        <label className="header-label" htmlFor="range-select">Date Range</label>
         <select
           id="range-select"
+          className="header-select"
           value={rangePreset}
           onChange={(event) => onRangePresetChange(event.target.value)}
         >
@@ -57,30 +50,31 @@ export function FilterPanel({
           <option value="custom">Custom</option>
         </select>
         {rangePreset === 'custom' ? (
-          <div className="custom-range">
-            <label>
-              Start
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => onStartDateChange(event.target.value)}
-              />
-            </label>
-            <label>
-              End
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => onEndDateChange(event.target.value)}
-              />
-            </label>
-          </div>
+          <>
+            <input
+              type="date"
+              className="header-select"
+              value={startDate}
+              onChange={(event) => onStartDateChange(event.target.value)}
+              aria-label="Start date"
+            />
+            <span className="header-label">–</span>
+            <input
+              type="date"
+              className="header-select"
+              value={endDate}
+              onChange={(event) => onEndDateChange(event.target.value)}
+              aria-label="End date"
+            />
+          </>
         ) : null}
-      </div>
-      <div className="card control-card">
-        <label htmlFor="metric-select">Metric</label>
+      </span>
+
+      <span className="header-control-group">
+        <label className="header-label" htmlFor="metric-select">Metrics</label>
         <select
           id="metric-select"
+          className="header-select"
           value={metric}
           onChange={(event) => onMetricChange(event.target.value)}
         >
@@ -91,12 +85,14 @@ export function FilterPanel({
           <option value="errors">Errors per day</option>
           <option value="utilization">Machine utilization</option>
         </select>
-      </div>
+      </span>
+
       {categoryOptions.length > 0 && metric !== 'errors' ? (
-        <div className="card control-card">
-          <label htmlFor="category-select">Category</label>
+        <span className="header-control-group">
+          <label className="header-label" htmlFor="category-select">Category</label>
           <select
             id="category-select"
+            className="header-select"
             value={categorySelection}
             onChange={(event) => onCategoryChange(event.target.value)}
           >
@@ -107,25 +103,24 @@ export function FilterPanel({
               </option>
             ))}
           </select>
-        </div>
+        </span>
       ) : null}
+
       {errorOptions.length > 0 && metric === 'errors' ? (
-        <div className="card control-card">
-          <label>Error types</label>
-          <div>
-            {errorOptions.map((error) => (
-              <label key={error} className="badge">
-                <input
-                  type="checkbox"
-                  checked={selectedErrors.size === 0 || selectedErrors.has(error)}
-                  onChange={() => onErrorToggle(error)}
-                />
-                <span>{error}</span>
-              </label>
-            ))}
-          </div>
-        </div>
+        <span className="header-control-group">
+          <span className="header-label">Error types</span>
+          {errorOptions.map((error) => (
+            <label key={error} className="badge">
+              <input
+                type="checkbox"
+                checked={selectedErrors.size === 0 || selectedErrors.has(error)}
+                onChange={() => onErrorToggle(error)}
+              />
+              <span>{error}</span>
+            </label>
+          ))}
+        </span>
       ) : null}
-    </section>
+    </>
   );
 }
