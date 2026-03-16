@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
-import { clearGuestMode, setGuestMode, useAuth } from '@/lib/auth-context';
+import { clearGuestMode, useAuth } from '@/lib/auth-context';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { session, isLoading } = useAuth();
+  const { session, isLoading, enterGuestMode } = useAuth();
 
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -39,7 +39,7 @@ export default function LoginPage() {
   }
 
   function handleGuest() {
-    setGuestMode();
+    enterGuestMode();
     void router.replace('/');
   }
 

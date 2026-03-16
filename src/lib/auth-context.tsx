@@ -2,13 +2,14 @@
  * auth-context.tsx — authentication state for the ICT Data Viewer.
  *
  * Provides:
- *   - session / user  — from Supabase auth
- *   - role            — fetched via get_my_role() RPC after sign-in
- *   - isGuest         — true when the user chose "Continue as guest"
- *   - isLoading       — true until the initial session check completes
+ *   - session / user    — from Supabase auth
+ *   - role              — fetched via get_my_role() RPC after sign-in
+ *   - isGuest           — true when the user chose "Continue as guest"
+ *   - isLoading         — true until the initial session check completes
+ *   - enterGuestMode()  — call instead of setGuestMode(); updates both
+ *                         sessionStorage and the React state in one step
  *
- * Helper exports:
- *   - setGuestMode()  — called from the login page "Continue as guest" button
+ * Internal helper exports (storage only, no state update):
  *   - clearGuestMode() — called on sign-in and sign-out
  */
 
@@ -34,6 +35,7 @@ type AuthContextValue = {
   role: AppRole;
   isGuest: boolean;
   isLoading: boolean;
+  enterGuestMode: () => void;
 };
 
 // ---------------------------------------------------------------------------
@@ -60,11 +62,12 @@ function isGuestStored(): boolean {
 // ---------------------------------------------------------------------------
 
 const AuthContext = createContext<AuthContextValue>({
-  session:   null,
-  user:      null,
-  role:      null,
-  isGuest:   false,
-  isLoading: true,
+  session:        null,
+  user:           null,
+  role:           null,
+  isGuest:        false,
+  isLoading:      true,
+  enterGuestMode: () => {},
 });
 
 export function useAuth(): AuthContextValue {
@@ -81,6 +84,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role,      setRole]      = useState<AppRole>(null);
   const [isGuest,   setIsGuest]   = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const enterGuestMode = useCallback(() => {
+    setGuestMode();
+    setIsGuest(true);
+  }, []);
 
   const fetchRole = useCallback(async () => {
     const { data, error } = await getSupabaseBrowser().rpc('get_my_role');
@@ -120,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchRole]);
 
   return (
-    <AuthContext.Provider value={{ session, user, role, isGuest, isLoading }}>
+    <AuthContext.Provider value={{ session, user, role, isGuest, isLoading, enterGuestMode }}>
       {children}
     </AuthContext.Provider>
   );
