@@ -75,14 +75,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   for (const { filename, content } of validFiles) {
     try {
-      // Guard: reject files that lack hex data — a reliable signal that this is
-      // not a valid ICT log. Non-log files (e.g. .lnk shortcuts, office docs)
-      // will not contain 0x-prefixed hex literals and are rejected here before
-      // any parsing is attempted.
-      if (!/0x[0-9a-fA-F]+/i.test(content)) {
-        throw new Error('Not a valid ICT log file (no hex data found)');
-      }
       const parsed = parseLog(filename, content);
+      // Guard: epoch-zero start_time means no ST: timestamp was found — the file
+      // is not a valid ICT log (e.g. a .lnk shortcut or other non-log file).
+      if (parsed.start_time.getTime() === 0) {
+        throw new Error('Not a valid ICT log file (missing timestamp)');
+      }
       await upsertTest(parsed);
       processed++;
     } catch (err) {
