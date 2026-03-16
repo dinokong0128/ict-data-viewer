@@ -300,8 +300,8 @@ const LOG_THRESHOLD_COMMON = `----------------------------------------
 TestPlan-A-v4.1
 Mon Mar 16 10:00:00 2026
 ----------------------------------------
-j501_loopback HAS FAILED
-J501=10.000
+jp_loopback HAS FAILED
+JP_LOOPBACK=10.000
 Measured:   17.500
 Threshold: 10.000
 Jumper Resistance in OHMS
@@ -329,7 +329,7 @@ const LOG_THRESHOLD_NO_COMP = `----------------------------------------
 TestPlan-A-v4.1
 Mon Mar 16 10:00:00 2026
 ----------------------------------------
-sw201%jp2_4_closed HAS FAILED
+sw%jp_closed HAS FAILED
 Board #: 0
 Threshold: 10.000
 Jumper Resistance in OHMS
@@ -354,7 +354,7 @@ S/N:PROD-999+SN-XXXX-000099
 describe('parseLog — threshold-style (jumper resistance) error blocks (Bug 2)', () => {
   it('common variant: routes Threshold: to threshold_raw, not nominal_raw', () => {
     const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_COMMON);
-    const err = r.errors.find((e) => e.location === 'j501_loopback')!;
+    const err = r.errors.find((e) => e.location === 'jp_loopback')!;
     expect(err).toBeDefined();
     expect(err.threshold_raw).toBe('10.000');
     expect(err.nominal_raw).not.toMatch(/Threshold/i);
@@ -362,19 +362,19 @@ describe('parseLog — threshold-style (jumper resistance) error blocks (Bug 2)'
 
   it('common variant: measured_raw is the actual measured value', () => {
     const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_COMMON);
-    const err = r.errors.find((e) => e.location === 'j501_loopback')!;
+    const err = r.errors.find((e) => e.location === 'jp_loopback')!;
     expect(err.measured_raw).toBe('17.500');
   });
 
   it('common variant: error_type is unknown (threshold-style, not nominal/high/low)', () => {
     const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_COMMON);
-    const err = r.errors.find((e) => e.location === 'j501_loopback')!;
+    const err = r.errors.find((e) => e.location === 'jp_loopback')!;
     expect(err.error_type).toBe('unknown');
   });
 
   it('less-common variant: routes Threshold: to threshold_raw, not measured_raw', () => {
     const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_NO_COMP);
-    const err = r.errors.find((e) => e.location === 'sw201%jp2_4_closed')!;
+    const err = r.errors.find((e) => e.location === 'sw%jp_closed')!;
     expect(err).toBeDefined();
     expect(err.threshold_raw).toBe('10.000');
     expect(err.measured_raw).not.toMatch(/Threshold/i);
@@ -382,7 +382,7 @@ describe('parseLog — threshold-style (jumper resistance) error blocks (Bug 2)'
 
   it('less-common variant: error_type is unknown', () => {
     const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_NO_COMP);
-    const err = r.errors.find((e) => e.location === 'sw201%jp2_4_closed')!;
+    const err = r.errors.find((e) => e.location === 'sw%jp_closed')!;
     expect(err.error_type).toBe('unknown');
   });
 });
@@ -409,7 +409,7 @@ describe('parseLog — raw_block capture', () => {
 
   it('raw_block for threshold-type error contains the Threshold: line', () => {
     const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_COMMON);
-    const err = r.errors.find((e) => e.location === 'j501_loopback')!;
+    const err = r.errors.find((e) => e.location === 'jp_loopback')!;
     expect(err.raw_block).toMatch(/Threshold:\s*10\.000/);
   });
 
