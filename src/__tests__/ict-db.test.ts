@@ -56,6 +56,7 @@ const PARSED: ParsedTest = {
       high_limit_raw: '1.2000u',
       low_limit_raw:  '0.80000u',
       threshold_raw:  null,
+      raw_block:      'c01 HAS FAILED\nC01=1UF Part# PART-REDACTED-002\nMeasured: 0.78327u',
     },
   ],
 };
@@ -139,6 +140,7 @@ describe('upsertTest', () => {
       location:   'c01',
       part_spec:  '1UF',
       unit:       'FARADS',
+      raw_block:  'c01 HAS FAILED\nC01=1UF Part# PART-REDACTED-002\nMeasured: 0.78327u',
     });
   });
 

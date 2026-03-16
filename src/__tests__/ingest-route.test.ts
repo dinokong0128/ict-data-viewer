@@ -161,4 +161,32 @@ describe('POST /api/ingest', () => {
     expect(body.failed).toHaveLength(2);
     expect(body.failed.map((f: { filename: string }) => f.filename)).toEqual(['a.log', 'b.log']);
   });
+
+  // --- file type guard (Bug 1) ---
+  it('rejects a non-ICT file whose parsed start_time is epoch zero', async () => {
+    // parseLog returns epoch-zero start_time for files with no ST: metadata (e.g. .lnk files)
+    mockParseLog.mockReturnValueOnce({ ...PARSED_RESULT, start_time: new Date(0) });
+    const res = await POST(makeRequest({
+      files: [{ filename: 'junk.lnk', content: 'garbage' }],
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.processed).toBe(0);
+    expect(body.failed).toHaveLength(1);
+    expect(body.failed[0].filename).toBe('junk.lnk');
+    expect(body.failed[0].error).toMatch(/Not a valid ICT log file/);
+    // upsertTest should never be called for a rejected file
+    expect(mockUpsertTest).not.toHaveBeenCalled();
+  });
+
+  it('accepts a file with a valid (non-zero) start_time', async () => {
+    mockParseLog.mockReturnValueOnce(PARSED_RESULT); // PARSED_RESULT has a real start_time
+    const res = await POST(makeRequest({
+      files: [{ filename: 'valid.log', content: 'some content' }],
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.processed).toBe(1);
+    expect(body.failed).toHaveLength(0);
+  });
 });

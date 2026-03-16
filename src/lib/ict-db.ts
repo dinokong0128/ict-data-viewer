@@ -110,6 +110,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
       high_limit_raw: e.high_limit_raw,
       low_limit_raw:  e.low_limit_raw,
       threshold_raw:  e.threshold_raw,
+      raw_block:      e.raw_block,
     }))
   );
   if (errErr) throw new Error(`test_errors insert failed: ${errErr.message}`);

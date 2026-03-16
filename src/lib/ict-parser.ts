@@ -34,6 +34,7 @@ export interface ParsedError {
   high_limit_raw: string;
   low_limit_raw:  string;
   threshold_raw:  string | null;
+  raw_block:      string | null; // raw lines that produced this error; null if not captured
 }
 
 const SEPARATOR = '----------------------------------------';
@@ -157,6 +158,7 @@ export function parseLog(filename: string, content: string): ParsedTest {
       if (!failedMatch) { j++; continue; }
 
       const location = failedMatch[1].toLowerCase();
+      const blockStart = j; // index of the HAS FAILED line itself
       j++;
 
       // Next line: COMPONENT=value Part# part#  OR  Subtest: ...  OR vector = ...
@@ -205,38 +207,43 @@ export function parseLog(filename: string, content: string): ParsedTest {
         unit = unitMatch ? unitMatch[1].toUpperCase() : '';
         j++;
       } else {
-        // Standard analog component failure: COMP=value Part# part#
+        // Standard analog or threshold-style (jumper resistance) failure.
+        // Try to extract COMP=value from the definition line first.
         const defMatch = defLine.match(/^[^=]+=([^\s]+)(?:\s+Part#\s+(.+))?$/i);
         part_spec = defMatch ? defMatch[1] : '';
         j++;
 
-        const measLine = (lines[j] ?? '').trimEnd();
-        measured_raw = measLine.replace(/^Measured:\s*/i, '').trim();
-        j++;
-
-        const nomLine = (lines[j] ?? '').trimEnd();
-        nominal_raw = nomLine.replace(/^Nominal:\s*/i, '').trim();
-        j++;
-
-        const hiLine = (lines[j] ?? '').trimEnd();
-        high_limit_raw = hiLine.replace(/^High Limit:\s*/i, '').trim();
-        j++;
-
-        const loLine = (lines[j] ?? '').trimEnd();
-        low_limit_raw = loLine.replace(/^Low Limit:\s*/i, '').trim();
-        j++;
-
-        const unitLine = (lines[j] ?? '').trimEnd();
-        const unitMatch = unitLine.match(/\bin\s+(FARADS|OHMS)\b/i);
-        if (unitMatch) {
-          unit = unitMatch[1].toUpperCase();
-          error_type = 'analog';
-        } else {
-          unit = unitLine.trim();
-          error_type = 'unknown';
+        // Content-based scan — detects fields by line prefix rather than position.
+        // This correctly routes Threshold: lines for jumper-resistance blocks while
+        // leaving standard analog blocks (Measured/Nominal/High Limit/Low Limit) intact.
+        while (j < lines.length) {
+          const scanLine = (lines[j] ?? '').trimEnd();
+          if (scanLine === SEPARATOR || /\bHAS FAILED\b/i.test(scanLine)) break;
+          if (/^Measured:\s*/i.test(scanLine)) {
+            measured_raw = scanLine.replace(/^Measured:\s*/i, '').trim();
+          } else if (/^Threshold:\s*/i.test(scanLine)) {
+            threshold_raw = scanLine.replace(/^Threshold:\s*/i, '').trim();
+          } else if (/^Nominal:\s*/i.test(scanLine)) {
+            nominal_raw = scanLine.replace(/^Nominal:\s*/i, '').trim();
+          } else if (/^High Limit:\s*/i.test(scanLine)) {
+            high_limit_raw = scanLine.replace(/^High Limit:\s*/i, '').trim();
+          } else if (/^Low Limit:\s*/i.test(scanLine)) {
+            low_limit_raw = scanLine.replace(/^Low Limit:\s*/i, '').trim();
+          }
+          const unitMatch = scanLine.match(/\bin\s+(FARADS|OHMS)\b/i);
+          if (unitMatch) {
+            unit = unitMatch[1].toUpperCase();
+          }
+          j++;
         }
-        j++;
+
+        // Analog: has FARADS/OHMS unit AND no threshold value.
+        // Threshold-style (jumper resistance): has OHMS unit but also has threshold_raw → unknown.
+        error_type = (unit === 'FARADS' || unit === 'OHMS') && !threshold_raw ? 'analog' : 'unknown';
       }
+
+      // Capture the raw lines that produced this error record (from HAS FAILED up to j).
+      const raw_block = lines.slice(blockStart, j).join('\n');
 
       // Deduplicate by location (keep first occurrence)
       if (!errorMap.has(location)) {
@@ -251,6 +258,7 @@ export function parseLog(filename: string, content: string): ParsedTest {
           high_limit_raw,
           low_limit_raw,
           threshold_raw,
+          raw_block,
         });
       }
     }
