@@ -42,7 +42,7 @@ export function FilterPanel({
         <button type="button" onClick={onReload}>
           Reload data
         </button>
-        <p style={{ margin: '8px 0 0', color: '#6b7280' }}>Loading data from Supabase.</p>
+        <p style={{ margin: '8px 0 0', color: '#6b7280' }}>Loading data.</p>
       </div>
       <div className="card control-card">
         <label htmlFor="range-select">Date range</label>
