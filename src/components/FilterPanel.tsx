@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 type FilterPanelProps = {
   onReload: () => void;
@@ -16,6 +16,7 @@ type FilterPanelProps = {
   errorOptions: string[];
   selectedErrors: Set<string>;
   onErrorToggle: (value: string) => void;
+  errorCounts?: Map<string, number>;
 };
 
 export function FilterPanel({
@@ -32,8 +33,10 @@ export function FilterPanel({
   onCategoryChange,
   errorOptions,
   selectedErrors,
-  onErrorToggle
+  onErrorToggle,
+  errorCounts = new Map(),
 }: FilterPanelProps) {
+  const [errorListExpanded, setErrorListExpanded] = useState(false);
   return (
     <>
       <span className="header-control-group">
@@ -108,17 +111,28 @@ export function FilterPanel({
 
       {errorOptions.length > 0 && metric === 'errors' ? (
         <span className="header-control-group">
-          <span className="header-label">Error types</span>
-          {errorOptions.map((error) => (
+          <span className="header-label">
+            Error types ({selectedErrors.size === 0 ? errorOptions.length : selectedErrors.size} of {errorOptions.length})
+          </span>
+          {(errorListExpanded ? errorOptions : errorOptions.slice(0, 5)).map((error) => (
             <label key={error} className="badge">
               <input
                 type="checkbox"
                 checked={selectedErrors.size === 0 || selectedErrors.has(error)}
                 onChange={() => onErrorToggle(error)}
               />
-              <span>{error}</span>
+              <span>{error} ({errorCounts.get(error) ?? 0})</span>
             </label>
           ))}
+          {errorOptions.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setErrorListExpanded((v) => !v)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 4px' }}
+            >
+              {errorListExpanded ? '▲ Show less' : `▼ +${errorOptions.length - 5} more`}
+            </button>
+          )}
         </span>
       ) : null}
     </>

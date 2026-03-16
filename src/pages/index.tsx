@@ -50,6 +50,7 @@ export default function HomePage() {
   const [categorySelection, setCategorySelection] = useState('top');
   const [selectedErrors, setSelectedErrors] = useState<Set<string>>(new Set());
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>(null);
+  const [summaryErrorsExpanded, setSummaryErrorsExpanded] = useState(false);
 
   const loadData = useCallback(async (start: string, end: string) => {
     if (!start || !end) return;
@@ -137,6 +138,16 @@ export default function HomePage() {
     return buildErrorCounts(rowsInRange);
   }, [rowsInRange]);
 
+  const errorTotals = useMemo(() => {
+    const m = new Map<string, number>();
+    filteredRows.forEach((r) => {
+      r.test_errors.forEach((e) => {
+        m.set(e.location, (m.get(e.location) ?? 0) + 1);
+      });
+    });
+    return m;
+  }, [filteredRows]);
+
   const utilizationData = useMemo<UtilizationEntry[]>(() => {
     if (!rowsInRange.length) return [];
     return buildUtilization(rowsInRange);
@@ -155,12 +166,10 @@ export default function HomePage() {
         errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
       });
     });
-    const topErrors = Object.entries(errorCounts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([loc, count]) => `${loc} (${count})`);
+    const allErrorsSorted = Object.entries(errorCounts)
+      .sort((a, b) => b[1] - a[1]) as Array<[string, number]>;
 
-    return { totalTests: rowsInRange.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, topErrors };
+    return { totalTests: rowsInRange.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, allErrorsSorted };
   }, [rowsInRange]);
 
   // Utilization summary items (for utilization metric)
@@ -239,12 +248,20 @@ export default function HomePage() {
 
   const tableRows = useMemo(() => {
     if (!filteredRows.length) return [] as TestRecord[];
-    if (!selectedDate) return filteredRows;
-    if (metric === 'utilization') {
-      return filteredRows.filter((r) => r.tester === selectedDate);
+
+    let rows = filteredRows;
+    if (metric === 'errors' && selectedErrors.size > 0) {
+      rows = rows.filter((r) =>
+        r.test_errors.some((e) => selectedErrors.has(e.location))
+      );
     }
-    return filteredRows.filter((r) => getDateKey(r) === selectedDate);
-  }, [filteredRows, selectedDate, metric]);
+
+    if (!selectedDate) return rows;
+    if (metric === 'utilization') {
+      return rows.filter((r) => r.tester === selectedDate);
+    }
+    return rows.filter((r) => getDateKey(r) === selectedDate);
+  }, [filteredRows, selectedDate, metric, selectedErrors]);
 
   const tableTitle = selectedDate
     ? metric === 'utilization'
@@ -262,6 +279,14 @@ export default function HomePage() {
 
   function handleSummaryFilterToggle(filter: NonNullable<SummaryFilter>) {
     setSummaryFilter((prev) => (prev === filter ? null : filter));
+    setSelectedDate(null);
+    setPage(1);
+  }
+
+  function handleSummaryErrorClick(errorLocation: string) {
+    setMetric('errors');
+    setSelectedErrors(new Set([errorLocation]));
+    setSummaryFilter(null);
     setSelectedDate(null);
     setPage(1);
   }
@@ -309,6 +334,7 @@ export default function HomePage() {
             categorySelection={categorySelection}
             onCategoryChange={setCategorySelection}
             errorOptions={errorInfo.errors}
+            errorCounts={errorTotals}
             selectedErrors={selectedErrors}
             onErrorToggle={(value) => {
               const next = new Set(selectedErrors);
@@ -402,8 +428,39 @@ export default function HomePage() {
                 </button>
               </li>
               <li>
-                Top errors:{' '}
-                {summaryStats.topErrors.length ? summaryStats.topErrors.join(', ') : 'None'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Top errors</span>
+                  {summaryStats.allErrorsSorted.length > 5 && (
+                    <button
+                      type="button"
+                      className="summary-num"
+                      onClick={() => setSummaryErrorsExpanded((v) => !v)}
+                    >
+                      {summaryErrorsExpanded ? '▲' : `▼ ${summaryStats.allErrorsSorted.length}`}
+                    </button>
+                  )}
+                </div>
+                {summaryStats.allErrorsSorted.length === 0 ? (
+                  <span style={{ color: '#6b7280', fontSize: '13px' }}>None</span>
+                ) : (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gap: '4px' }}>
+                    {(summaryErrorsExpanded
+                      ? summaryStats.allErrorsSorted
+                      : summaryStats.allErrorsSorted.slice(0, 5)
+                    ).map(([loc, count]) => (
+                      <li key={loc} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                        <span>{loc}</span>
+                        <button
+                          type="button"
+                          className="summary-num"
+                          onClick={() => handleSummaryErrorClick(loc)}
+                        >
+                          {count}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </li>
             </ul>
           ) : null}
