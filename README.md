@@ -1,6 +1,6 @@
 # ICT Data Viewer
 
-A Next.js + React dashboard that visualizes ICT test logs directly from Google Sheets. The app reads the data live from the sheet and does **not** download or persist any records locally.
+A Next.js + React dashboard that visualizes ICT (In-Circuit Test) board test results stored in Supabase.
 
 ## Tech stack
 
@@ -8,6 +8,7 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
 - TypeScript
 - Jest + Testing Library
 - ESLint
+- Supabase (PostgreSQL)
 
 ## Getting started
 
@@ -15,15 +16,17 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
    ```bash
    npm install
    ```
-2. Set the Google Sheet ID in an environment variable:
+2. Set the required environment variables:
    ```bash
-   export SHEET_ID="your-sheet-id"
+   export SUPABASE_URL="https://your-project-ref.supabase.co"
+   export SUPABASE_SERVICE_KEY="your-service-role-key"
+   export INGEST_SECRET="your-ingest-secret"
    ```
 3. Run the dev server:
    ```bash
    npm run dev
    ```
-4. Open `http://localhost:3000` and the dashboard will load all tabs in the sheet.
+4. Open `http://localhost:3000`. Without `SUPABASE_URL`, the dashboard loads guest fixture data automatically (demo mode).
 
 ## Tests & linting
 
@@ -38,8 +41,8 @@ A Next.js + React dashboard that visualizes ICT test logs directly from Google S
 
 ## Troubleshooting
 
-If the UI reports “Not found” or “Unable to load data,” confirm the Google Sheet is shared with **Anyone with the link** and that `SHEET_ID` is set correctly.
+If the UI reports "Not found" or "Unable to load data," confirm `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` are set correctly.
 
 ## Vercel config
 
-Add `SHEET_ID` as an environment variable in your Vercel project settings.
+Add `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, and `INGEST_SECRET` as environment variables in your Vercel project settings.
