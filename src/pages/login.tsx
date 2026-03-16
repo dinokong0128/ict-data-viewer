@@ -24,7 +24,13 @@ export default function LoginPage() {
     setPending(true);
     setError(null);
 
-    const { error: authError } = await getSupabaseBrowser().auth.signInWithPassword({
+    const sb = getSupabaseBrowser();
+    if (!sb) {
+      setError('Authentication is not configured.');
+      setPending(false);
+      return;
+    }
+    const { error: authError } = await sb.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
