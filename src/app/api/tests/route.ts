@@ -1,30 +1,35 @@
 /**
  * GET /api/tests?start=YYYY-MM-DD&end=YYYY-MM-DD
  *
- * Returns TestRecord[] joined across tests + boards + products + test_errors.
- * Falls back to src/fixtures/guest-data.json when SUPABASE_URL is not set.
- * Dates are offset so the most-recent fixture test always appears as today,
- * keeping the default 7-day range useful in demo mode.
+ * Data routing:
+ *   - Authenticated request (Authorization: Bearer <jwt>):
+ *       Queries Supabase using the user's JWT + anon key → RLS enforced.
+ *   - Guest request (no Authorization header):
+ *       Returns src/fixtures/guest-data.json (no Supabase call made).
+ *
+ * Returns { records: TestRecord[], demo: boolean }
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import path from 'path';
 import fs from 'fs';
 import type { TestRecord, TestErrorRecord } from '@/lib/testUtils';
 
 // ---------------------------------------------------------------------------
-// Supabase live path
+// Supabase live path (RLS-enforced via user JWT + anon key)
 // ---------------------------------------------------------------------------
 
-function getSupabase() {
-  const url = process.env.SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_KEY!;
-  return createClient(url, key) as ReturnType<typeof createClient<any, any, any>>;
+function getSupabaseForUser(authHeader: string): SupabaseClient {
+  const url    = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL!;
+  const anon   = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  return createClient(url, anon, {
+    global: { headers: { Authorization: authHeader } },
+    auth:   { persistSession: false },
+  }) as SupabaseClient;
 }
 
-async function fetchFromSupabase(start: string, end: string): Promise<TestRecord[]> {
-  const sb = getSupabase();
+async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string): Promise<TestRecord[]> {
   const { data, error } = await sb
     .from('tests')
     .select(`
@@ -62,7 +67,7 @@ async function fetchFromSupabase(start: string, end: string): Promise<TestRecord
 }
 
 // ---------------------------------------------------------------------------
-// Fixture / demo path
+// Fixture / guest path
 // ---------------------------------------------------------------------------
 
 type FixtureData = {
@@ -173,14 +178,19 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'start and end query params are required (YYYY-MM-DD)' }, { status: 400 });
   }
 
-  const usingFixture = !process.env.SUPABASE_URL;
+  const authHeader = req.headers.get('authorization');
 
+  // Guest path — no auth header → return fixture, no Supabase call made
+  if (!authHeader) {
+    const records = fetchFromFixture(start, end);
+    return NextResponse.json({ records, demo: true });
+  }
+
+  // Authenticated path — use user JWT with anon key so RLS is enforced
   try {
-    const records = usingFixture
-      ? fetchFromFixture(start, end)
-      : await fetchFromSupabase(start, end);
-
-    return NextResponse.json({ records, demo: usingFixture });
+    const sb = getSupabaseForUser(authHeader);
+    const records = await fetchFromSupabase(sb, start, end);
+    return NextResponse.json({ records, demo: false });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json({ error: message }, { status: 500 });
