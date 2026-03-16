@@ -91,7 +91,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const fetchRole = useCallback(async () => {
-    const { data, error } = await getSupabaseBrowser().rpc('get_my_role');
+    const sb = getSupabaseBrowser();
+    if (!sb) return;
+    const { data, error } = await sb.rpc('get_my_role');
     if (!error && data) {
       setRole(data as AppRole);
     } else {
@@ -100,8 +102,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const sb = getSupabaseBrowser();
+    if (!sb) {
+      // Supabase not configured (NEXT_PUBLIC_SUPABASE_URL missing) — skip auth
+      setIsLoading(false);
+      return;
+    }
+
     // Restore existing session on mount
-    void getSupabaseBrowser().auth.getSession().then(({ data: { session: s } }) => {
+    void sb.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
       setIsGuest(!s && isGuestStored());
@@ -110,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Subscribe to future auth state changes
-    const { data: { subscription } } = getSupabaseBrowser().auth.onAuthStateChange(
+    const { data: { subscription } } = sb.auth.onAuthStateChange(
       (_event, s) => {
         setSession(s);
         setUser(s?.user ?? null);

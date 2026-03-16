@@ -88,7 +88,8 @@ export default function HomePage() {
   }, [rangePreset, loadData]);
 
   async function handleLogout() {
-    await getSupabaseBrowser().auth.signOut();
+    const sb = getSupabaseBrowser();
+    if (sb) await sb.auth.signOut();
     clearGuestMode();
     void router.push('/login');
   }
