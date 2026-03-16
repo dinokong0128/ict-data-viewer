@@ -82,8 +82,10 @@ export function ChartPanel({ labels, datasets, chartType, onSelectDate }: ChartP
   }, [labels, datasets, chartType, onSelectDate]);
 
   return (
-    <div className="card chart-card" style={{ position: 'relative' }}>
-      <canvas ref={canvasRef} />
+    <div className="card chart-card">
+      <div style={{ position: 'relative', height: '360px' }}>
+        <canvas ref={canvasRef} />
+      </div>
       <p className="chart-hint">Click a bar/point to view detailed test rows.</p>
     </div>
   );
