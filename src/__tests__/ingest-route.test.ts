@@ -40,11 +40,15 @@ const PARSED_RESULT = {
   errors:        [],
 };
 
+// ICT log content stub: must contain a 0x hex value to pass the file guard.
+const ICT_CONTENT_A = 'Status: 0x0F data1';
+const ICT_CONTENT_B = 'Status: 0x1A data2';
+
 // Two-file batch used across most tests
 const BATCH = {
   files: [
-    { filename: 'a.log', content: 'data1' },
-    { filename: 'b.log', content: 'data2' },
+    { filename: 'a.log', content: ICT_CONTENT_A },
+    { filename: 'b.log', content: ICT_CONTENT_B },
   ],
 };
 
@@ -113,8 +117,8 @@ describe('POST /api/ingest', () => {
   it('calls parseLog and upsertTest for each file in the batch', async () => {
     await POST(makeRequest(BATCH));
     expect(mockParseLog).toHaveBeenCalledTimes(2);
-    expect(mockParseLog).toHaveBeenCalledWith('a.log', 'data1');
-    expect(mockParseLog).toHaveBeenCalledWith('b.log', 'data2');
+    expect(mockParseLog).toHaveBeenCalledWith('a.log', ICT_CONTENT_A);
+    expect(mockParseLog).toHaveBeenCalledWith('b.log', ICT_CONTENT_B);
     expect(mockUpsertTest).toHaveBeenCalledTimes(2);
   });
 
@@ -160,5 +164,30 @@ describe('POST /api/ingest', () => {
     expect(body.processed).toBe(0);
     expect(body.failed).toHaveLength(2);
     expect(body.failed.map((f: { filename: string }) => f.filename)).toEqual(['a.log', 'b.log']);
+  });
+
+  // --- file type guard (Bug 1) ---
+  it('rejects a file with no hex data (non-ICT file) into failed[]', async () => {
+    const res = await POST(makeRequest({
+      files: [{ filename: 'ESET Online Scanner.lnk', content: 'binary garbage no hex here' }],
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.processed).toBe(0);
+    expect(body.failed).toHaveLength(1);
+    expect(body.failed[0].filename).toBe('ESET Online Scanner.lnk');
+    expect(body.failed[0].error).toMatch(/Not a valid ICT log file/);
+    // parseLog should never have been called for this file
+    expect(mockParseLog).not.toHaveBeenCalled();
+  });
+
+  it('accepts a file whose content contains a 0x hex value regardless of filename', async () => {
+    const res = await POST(makeRequest({
+      files: [{ filename: 'weird-name.lnk', content: 'Status: 0xFF some ict data' }],
+    }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Guard passes; parseLog is called (it may succeed or fail on the stub content, but it was called)
+    expect(mockParseLog).toHaveBeenCalledWith('weird-name.lnk', 'Status: 0xFF some ict data');
   });
 });

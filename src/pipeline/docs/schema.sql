@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS test_errors (
   nominal_raw    text,
   high_limit_raw text,
   low_limit_raw  text,
-  threshold_raw  text                -- for shorts/resistance checks; NULL otherwise
+  threshold_raw  text,               -- for shorts/resistance checks; NULL otherwise
+  raw_block      text                -- raw log lines that produced this error; enables re-parsing
 );
 
 -- Add new columns if upgrading from an older schema
@@ -99,6 +100,7 @@ ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS nominal_raw    text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS high_limit_raw text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS low_limit_raw  text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_raw  text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS raw_block      text;
 
 -- ============================================================
 -- 5. Rolling 3-month delete  (pg_cron)

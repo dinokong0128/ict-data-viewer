@@ -75,6 +75,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   for (const { filename, content } of validFiles) {
     try {
+      // Guard: reject files that lack hex data — a reliable signal that this is
+      // not a valid ICT log. Non-log files (e.g. .lnk shortcuts, office docs)
+      // will not contain 0x-prefixed hex literals and are rejected here before
+      // any parsing is attempted.
+      if (!/0x[0-9a-fA-F]+/i.test(content)) {
+        throw new Error('Not a valid ICT log file (no hex data found)');
+      }
       const parsed = parseLog(filename, content);
       await upsertTest(parsed);
       processed++;

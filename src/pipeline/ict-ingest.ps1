@@ -27,6 +27,7 @@ foreach ($dir in $config.directories) {
   Get-ChildItem -Path $dir -File -Recurse | ForEach-Object {
     if ($ingested.ContainsKey($_.Name)) { return }
     if ($null -ne $cutoff -and $_.LastWriteTime -lt $cutoff) { return }
+    if ([System.IO.Path]::GetExtension($_.Name) -eq '.lnk') { return }
     $null = $candidates.Add($_)
   }
 }
