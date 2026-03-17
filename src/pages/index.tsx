@@ -67,6 +67,21 @@ export default function HomePage() {
   // True once the first successful fetch has resolved; used to pick the right
   // error message (stale-data fallback vs. hard initial-load failure).
   const hasDataRef = useRef(false);
+  // Tracks the user ID from the previous render. Starts as `undefined` (sentinel
+  // meaning "no prior identity seen") so the initial mount never triggers a clear.
+  const prevUserIdRef = useRef<string | undefined>(undefined);
+
+  // When the authenticated user identity changes (sign-out, session expiry, or a
+  // different user logging in), discard any stale private data immediately so it
+  // cannot be rendered in the new/unauthenticated context.
+  useEffect(() => {
+    const currentUserId = session?.user?.id;
+    if (prevUserIdRef.current !== undefined && prevUserIdRef.current !== currentUserId) {
+      setRecords([]);
+      hasDataRef.current = false;
+    }
+    prevUserIdRef.current = currentUserId;
+  }, [session]);
 
   const loadData = useCallback(async (start: string, end: string) => {
     if (!start || !end) return;
