@@ -60,6 +60,72 @@ describe('DetailTable', () => {
     expect(screen.getByText('fail')).toBeInTheDocument();
   });
 
+  it('calls onFixtureClick with fixture value when fixture cell is clicked', () => {
+    const onFixtureClick = jest.fn();
+    render(
+      <DetailTable
+        rows={[makeRecord({ id: 1, serial_number: 'SN-001', fixture_id: 'fixture-42' })]}
+        page={1}
+        pageSize={10}
+        onPageChange={jest.fn()}
+        title="Test"
+        onFixtureClick={onFixtureClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'fixture-42' }));
+    expect(onFixtureClick).toHaveBeenCalledWith('fixture-42');
+  });
+
+  it('calls onSnClick with serial number when SN cell is clicked', () => {
+    const onSnClick = jest.fn();
+    render(
+      <DetailTable
+        rows={[makeRecord({ id: 1, serial_number: 'SN-999' })]}
+        page={1}
+        pageSize={10}
+        onPageChange={jest.fn()}
+        title="Test"
+        onSnClick={onSnClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'SN-999' }));
+    expect(onSnClick).toHaveBeenCalledWith('SN-999');
+  });
+
+  it('calls onTesterClick with tester value when tester cell is clicked', () => {
+    const onTesterClick = jest.fn();
+    render(
+      <DetailTable
+        rows={[makeRecord({ id: 1, serial_number: 'SN-001', tester: 'tester-99' })]}
+        page={1}
+        pageSize={10}
+        onPageChange={jest.fn()}
+        title="Test"
+        onTesterClick={onTesterClick}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'tester-99' }));
+    expect(onTesterClick).toHaveBeenCalledWith('tester-99');
+  });
+
+  it('renders fixture as plain text when onFixtureClick is not provided', () => {
+    render(
+      <DetailTable
+        rows={[makeRecord({ id: 1, serial_number: 'SN-001', fixture_id: 'fixture-plain' })]}
+        page={1}
+        pageSize={10}
+        onPageChange={jest.fn()}
+        title="Test"
+      />
+    );
+
+    expect(screen.getByText('fixture-plain')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'fixture-plain' })).not.toBeInTheDocument();
+  });
+
   it('shows error locations for failed board', () => {
     const row = makeRecord({
       id: 1,

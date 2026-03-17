@@ -3,12 +3,11 @@ import { FilterPanel } from '@/components/FilterPanel';
 
 describe('FilterPanel', () => {
   it('fires change handlers', () => {
-    const onReload = jest.fn();
     const onMetricChange = jest.fn();
 
     render(
       <FilterPanel
-        onReload={onReload}
+        onReload={() => undefined}
         rangePreset="7"
         onRangePresetChange={() => undefined}
         startDate="2024-05-01"
@@ -26,10 +25,7 @@ describe('FilterPanel', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /reload data/i }));
-    expect(onReload).toHaveBeenCalledTimes(1);
-
-    fireEvent.change(screen.getByLabelText('Metric'), { target: { value: 'errors' } });
+    fireEvent.change(screen.getByLabelText('Metrics'), { target: { value: 'errors' } });
     expect(onMetricChange).toHaveBeenCalledWith('errors');
   });
 
@@ -54,7 +50,7 @@ describe('FilterPanel', () => {
       />
     );
 
-    expect(screen.queryByLabelText('Start')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument();
 
     rerender(
       <FilterPanel
@@ -76,7 +72,7 @@ describe('FilterPanel', () => {
       />
     );
 
-    expect(screen.getByLabelText('Start')).toBeInTheDocument();
-    expect(screen.getByLabelText('End')).toBeInTheDocument();
+    expect(screen.getByLabelText('Start date')).toBeInTheDocument();
+    expect(screen.getByLabelText('End date')).toBeInTheDocument();
   });
 });

@@ -7,9 +7,27 @@ type DetailTableProps = {
   pageSize: number;
   onPageChange: (page: number) => void;
   title: string;
+  onFixtureClick?: (value: string) => void;
+  onSnClick?: (value: string) => void;
+  onTesterClick?: (value: string) => void;
+  activeFixture?: string;
+  activeSn?: string;
+  activeTester?: string;
 };
 
-export function DetailTable({ rows, page, pageSize, onPageChange, title }: DetailTableProps) {
+export function DetailTable({
+  rows,
+  page,
+  pageSize,
+  onPageChange,
+  title,
+  onFixtureClick,
+  onSnClick,
+  onTesterClick,
+  activeFixture,
+  activeSn,
+  activeTester,
+}: DetailTableProps) {
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
@@ -50,14 +68,71 @@ export function DetailTable({ rows, page, pageSize, onPageChange, title }: Detai
             {pageRows.map((row) => (
               <tr key={row.id}>
                 <td>{row.start_time.slice(0, 10)}</td>
-                <td>{row.serial_number}</td>
+                <td>
+                  {onSnClick ? (
+                    <button
+                      type="button"
+                      onClick={() => onSnClick(row.serial_number)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        textDecoration: 'underline dotted',
+                        fontWeight: activeSn === row.serial_number ? 'bold' : undefined,
+                        color: 'inherit',
+                        font: 'inherit',
+                      }}
+                    >
+                      {row.serial_number}
+                    </button>
+                  ) : row.serial_number}
+                </td>
                 <td>{row.rev}</td>
                 <td>{row.product_name}</td>
                 <td style={{ color: row.result === 'pass' ? '#10b981' : '#ef4444', fontWeight: 'bold' }}>
                   {row.result}
                 </td>
-                <td>{row.tester}</td>
-                <td>{row.fixture_id}</td>
+                <td>
+                  {onTesterClick ? (
+                    <button
+                      type="button"
+                      onClick={() => onTesterClick(row.tester)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        textDecoration: 'underline dotted',
+                        fontWeight: activeTester === row.tester ? 'bold' : undefined,
+                        color: 'inherit',
+                        font: 'inherit',
+                      }}
+                    >
+                      {row.tester}
+                    </button>
+                  ) : row.tester}
+                </td>
+                <td>
+                  {onFixtureClick ? (
+                    <button
+                      type="button"
+                      onClick={() => onFixtureClick(row.fixture_id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        textDecoration: 'underline dotted',
+                        fontWeight: activeFixture === row.fixture_id ? 'bold' : undefined,
+                        color: 'inherit',
+                        font: 'inherit',
+                      }}
+                    >
+                      {row.fixture_id}
+                    </button>
+                  ) : row.fixture_id}
+                </td>
                 <td>{row.operator_id}</td>
                 <td>{row.test_errors.length > 0 ? row.test_errors.map((e) => e.location).join(', ') : '—'}</td>
               </tr>
