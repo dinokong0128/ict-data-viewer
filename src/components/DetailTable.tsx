@@ -1,5 +1,5 @@
-import React from 'react';
-import type { TestRecord } from '@/lib/testUtils';
+import React, { useState } from 'react';
+import type { TestErrorRecord, TestRecord } from '@/lib/testUtils';
 
 type DetailTableProps = {
   rows: TestRecord[];
@@ -15,6 +15,73 @@ type DetailTableProps = {
   activeTester?: string;
 };
 
+const COLLAPSED_COUNT = 3;
+
+function dash(value: string | null | undefined): string {
+  return value == null || value === '' ? '—' : value;
+}
+
+function ErrorsCell({ errors, expanded, onToggle }: { errors: TestErrorRecord[]; expanded: boolean; onToggle: () => void }) {
+  if (errors.length === 0) return <span>—</span>;
+
+  if (errors.length <= COLLAPSED_COUNT) {
+    return <span>{errors.map((e) => e.location).join(', ')}</span>;
+  }
+
+  if (!expanded) {
+    return (
+      <div>
+        <span>{errors.slice(0, COLLAPSED_COUNT).map((e) => e.location).join(', ')}</span>
+        <div>
+          <button
+            type="button"
+            onClick={onToggle}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
+          >
+            Show all ({errors.length})
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <table style={{ fontSize: '12px', borderCollapse: 'collapse', width: '100%' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Error</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Measured</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>High limit</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Low limit</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Threshold</th>
+            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Unit</th>
+          </tr>
+        </thead>
+        <tbody>
+          {errors.map((e) => (
+            <tr key={e.location}>
+              <td style={{ padding: '2px 6px 2px 0' }}>{e.location}</td>
+              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.measured_raw)}</td>
+              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.high_limit_raw)}</td>
+              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.low_limit_raw)}</td>
+              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.threshold_raw)}</td>
+              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.unit)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <button
+        type="button"
+        onClick={onToggle}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
+      >
+        Show less
+      </button>
+    </div>
+  );
+}
+
 export function DetailTable({
   rows,
   page,
@@ -28,10 +95,23 @@ export function DetailTable({
   activeSn,
   activeTester,
 }: DetailTableProps) {
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
   const pageRows = rows.slice(start, start + pageSize);
+
+  function toggleRow(id: number) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
 
   return (
     <section className="section card">
@@ -134,7 +214,13 @@ export function DetailTable({
                   ) : row.fixture_id}
                 </td>
                 <td>{row.operator_id}</td>
-                <td>{row.test_errors.length > 0 ? row.test_errors.map((e) => e.location).join(', ') : '—'}</td>
+                <td>
+                  <ErrorsCell
+                    errors={row.test_errors}
+                    expanded={expandedRows.has(row.id)}
+                    onToggle={() => toggleRow(row.id)}
+                  />
+                </td>
               </tr>
             ))}
           </tbody>

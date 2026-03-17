@@ -6,6 +6,8 @@ import { FilterPanel } from '@/components/FilterPanel';
 import { StatusBanner } from '@/components/StatusBanner';
 import { clearGuestMode, useAuth } from '@/lib/auth-context';
 import { getSupabaseBrowser } from '@/lib/supabase-browser';
+import { ErrorSearchInput } from '@/components/ErrorSearchInput';
+import { useErrorSearch } from '@/lib/useErrorSearch';
 import {
   buildErrorCounts,
   buildUtilization,
@@ -226,6 +228,12 @@ export default function HomePage() {
 
     return { totalTests: rowsFiltered.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, allErrorsSorted };
   }, [rowsFiltered]);
+
+  const summaryErrorNames = useMemo(
+    () => (summaryStats ? summaryStats.allErrorsSorted.map(([loc]) => loc) : []),
+    [summaryStats]
+  );
+  const { query: summaryErrorQuery, setQuery: setSummaryErrorQuery, filtered: filteredSummaryErrorNames } = useErrorSearch(summaryErrorNames, summaryErrorsExpanded);
 
   // Utilization summary items (for utilization metric)
   const utilizationSummaryItems = useMemo(() => {
@@ -528,23 +536,28 @@ export default function HomePage() {
                 {summaryStats.allErrorsSorted.length === 0 ? (
                   <span style={{ color: '#6b7280', fontSize: '13px' }}>None</span>
                 ) : (
-                  <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gap: '4px' }}>
-                    {(summaryErrorsExpanded
-                      ? summaryStats.allErrorsSorted
-                      : summaryStats.allErrorsSorted.slice(0, 3)
-                    ).map(([loc, count]) => (
-                      <li key={loc} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                        <span>{loc}</span>
-                        <button
-                          type="button"
-                          className="summary-num"
-                          onClick={() => handleSummaryErrorClick(loc)}
-                        >
-                          {count}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    <ErrorSearchInput value={summaryErrorQuery} onChange={setSummaryErrorQuery} />
+                    <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gap: '4px' }}>
+                      {(summaryErrorQuery.trim()
+                        ? summaryStats.allErrorsSorted.filter(([loc]) => filteredSummaryErrorNames.includes(loc))
+                        : summaryErrorsExpanded
+                          ? summaryStats.allErrorsSorted
+                          : summaryStats.allErrorsSorted.slice(0, 3)
+                      ).map(([loc, count]) => (
+                        <li key={loc} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                          <span>{loc}</span>
+                          <button
+                            type="button"
+                            className="summary-num"
+                            onClick={() => handleSummaryErrorClick(loc)}
+                          >
+                            {count}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
                 )}
               </li>
             </ul>

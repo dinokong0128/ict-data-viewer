@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useErrorSearch } from '@/lib/useErrorSearch';
+import { ErrorSearchInput } from '@/components/ErrorSearchInput';
 
 type FilterPanelProps = {
   onReload: () => void;
@@ -37,6 +39,7 @@ export function FilterPanel({
   errorCounts = new Map(),
 }: FilterPanelProps) {
   const [errorListExpanded, setErrorListExpanded] = useState(false);
+  const { query: errorSearchQuery, setQuery: setErrorSearchQuery, filtered: filteredErrorOptions } = useErrorSearch(errorOptions, metric === 'errors');
   return (
     <>
       <span className="header-control-group">
@@ -114,7 +117,11 @@ export function FilterPanel({
           <span className="header-label">
             Error types ({selectedErrors.size === 0 ? errorOptions.length : selectedErrors.size} of {errorOptions.length})
           </span>
-          {(errorListExpanded ? errorOptions : errorOptions.slice(0, 5)).map((error) => (
+          <ErrorSearchInput value={errorSearchQuery} onChange={setErrorSearchQuery} />
+          {(errorSearchQuery.trim()
+            ? filteredErrorOptions
+            : errorListExpanded ? errorOptions : errorOptions.slice(0, 5)
+          ).map((error) => (
             <label key={error} className="badge">
               <input
                 type="checkbox"
@@ -124,7 +131,7 @@ export function FilterPanel({
               <span>{error} ({errorCounts.get(error) ?? 0})</span>
             </label>
           ))}
-          {errorOptions.length > 5 && (
+          {!errorSearchQuery.trim() && errorOptions.length > 5 && (
             <button
               type="button"
               onClick={() => setErrorListExpanded((v) => !v)}
