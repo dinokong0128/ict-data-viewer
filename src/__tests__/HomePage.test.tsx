@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import HomePage from '@/pages/index';
 import type { TestRecord } from '@/lib/testUtils';
 
@@ -21,9 +21,18 @@ jest.mock('@/lib/auth-context', () => ({
   clearGuestMode: jest.fn(),
 }));
 
-// Mock next/router
+// Mock next/router — default: no query params, router not seeding
+const mockRouterQuery: Record<string, string> = {};
+let mockRouterIsReady = true;
+
 jest.mock('next/router', () => ({
-  useRouter: () => ({ pathname: '/', replace: jest.fn(), push: jest.fn() }),
+  useRouter: () => ({
+    pathname: '/',
+    replace: jest.fn(),
+    push: jest.fn(),
+    isReady: mockRouterIsReady,
+    query: mockRouterQuery,
+  }),
 }));
 
 // Mock supabase-browser (sign-out only used in logout handler)
@@ -65,9 +74,17 @@ beforeEach(() => {
     isLoading: false,
   });
 
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({ records: [MOCK_RECORD], demo: false }),
+  global.fetch = jest.fn().mockImplementation((url: string) => {
+    if (url.includes('/api/products')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ products: [{ id: 'PART-001', product_name: 'Test Product A' }] }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({ records: [MOCK_RECORD], demo: false }),
+    });
   }) as jest.Mock;
 });
 
@@ -84,7 +101,9 @@ describe('HomePage', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText(/Total tests: 1/i)).toBeInTheDocument();
+      const items = screen.getAllByRole('listitem');
+      const totalItem = items.find((el) => /total tests:/i.test(el.textContent ?? ''));
+      expect(totalItem?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Total tests: 1');
     });
   });
 
@@ -124,5 +143,75 @@ describe('HomePage', () => {
 
     const [, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
     expect((options?.headers as Record<string, string>)?.['Authorization']).toBeUndefined();
+  });
+
+  it('seeds metric from URL query param on mount', async () => {
+    mockRouterQuery['metric'] = 'errors';
+
+    render(<HomePage />);
+
+    await waitFor(() => {
+      const metricSelect = document.getElementById('metric-select') as HTMLSelectElement | null;
+      expect(metricSelect?.value).toBe('errors');
+    });
+
+    delete mockRouterQuery['metric'];
+  });
+
+  it('seeds dateFrom/dateTo from URL and calls loadData with those dates', async () => {
+    mockRouterQuery['dateFrom'] = '2026-01-01';
+    mockRouterQuery['dateTo'] = '2026-01-07';
+
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
+    });
+
+    const calls = (global.fetch as jest.Mock).mock.calls as [string, RequestInit][];
+    const urlSeededCall = calls.find(([url]) => (url as string).includes('start=2026-01-01'));
+    expect(urlSeededCall).toBeDefined();
+
+    delete mockRouterQuery['dateFrom'];
+    delete mockRouterQuery['dateTo'];
+  });
+
+  it('renders product filter dropdown with All products and fetched options', async () => {
+    render(<HomePage />);
+
+    await waitFor(() => {
+      const productSelect = document.getElementById('product-select') as HTMLSelectElement | null;
+      expect(productSelect).not.toBeNull();
+      const options = Array.from(productSelect?.options ?? []).map((o) => o.text);
+      expect(options).toContain('All products');
+      expect(options).toContain('Test Product A');
+    });
+  });
+
+  it('product filter shows all products when no selection (default empty value)', async () => {
+    render(<HomePage />);
+
+    await waitFor(() => {
+      const productSelect = document.getElementById('product-select') as HTMLSelectElement | null;
+      expect(productSelect?.value).toBe('');
+    });
+  });
+
+  it('selecting a product updates the filter select value', async () => {
+    render(<HomePage />);
+
+    await waitFor(() => {
+      expect(document.getElementById('product-select')).not.toBeNull();
+    });
+
+    const productSelect = document.getElementById('product-select') as HTMLSelectElement;
+
+    await waitFor(() => {
+      const options = Array.from(productSelect.options).map((o) => o.value);
+      expect(options).toContain('Test Product A');
+    });
+
+    fireEvent.change(productSelect, { target: { value: 'Test Product A' } });
+    expect(productSelect.value).toBe('Test Product A');
   });
 });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ChartPanel, type ChartDataset } from '@/components/ChartPanel';
 import { DetailTable } from '@/components/DetailTable';
@@ -51,9 +51,20 @@ export default function HomePage() {
   const [selectedErrors, setSelectedErrors] = useState<Set<string>>(new Set());
   const [summaryFilter, setSummaryFilter] = useState<SummaryFilter>(null);
   const [summaryErrorsExpanded, setSummaryErrorsExpanded] = useState(false);
+  const [product, setProduct] = useState('');
+  const [fixture, setFixture] = useState('');
+  const [sn, setSn] = useState('');
+  const [tester, setTester] = useState('');
+  const [productOptions, setProductOptions] = useState<string[]>([]);
+
+  // Incremented on every loadData call; each call captures its own snapshot so
+  // stale responses (e.g. the default 30-day load racing the URL-seeded load) are
+  // discarded before they can overwrite the result of the most recent request.
+  const loadIdRef = useRef(0);
 
   const loadData = useCallback(async (start: string, end: string) => {
     if (!start || !end) return;
+    const myId = ++loadIdRef.current;
     try {
       setStatus('Loading data...');
 
@@ -68,9 +79,11 @@ export default function HomePage() {
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const body = (await res.json()) as { records: TestRecord[]; demo: boolean };
+      if (myId !== loadIdRef.current) return;
       setRecords(body.records);
       setStatus(null);
     } catch (err) {
+      if (myId !== loadIdRef.current) return;
       setStatus(err instanceof Error ? err.message : 'Unable to load data.');
       setRecords([]);
     }
@@ -90,6 +103,38 @@ export default function HomePage() {
       void loadData(s, e);
     }
   }, [rangePreset, loadData]);
+
+  // Seed filter state from URL query params on first router-ready (Option B: mount only).
+  const seededRef = useRef(false);
+  useEffect(() => {
+    if (!router.isReady || seededRef.current) return;
+    seededRef.current = true;
+    const q = router.query;
+    if (typeof q.product === 'string' && q.product) setProduct(q.product);
+    if (typeof q.fixture === 'string' && q.fixture) setFixture(q.fixture);
+    if (typeof q.sn === 'string' && q.sn) setSn(q.sn);
+    if (typeof q.tester === 'string' && q.tester) setTester(q.tester);
+    const VALID_METRICS = ['boards', 'tester', 'fixture', 'operator', 'errors', 'utilization'];
+    if (typeof q.metric === 'string' && VALID_METRICS.includes(q.metric)) setMetric(q.metric);
+    if (typeof q.dateFrom === 'string' && q.dateFrom && typeof q.dateTo === 'string' && q.dateTo) {
+      setStartDate(q.dateFrom);
+      setEndDate(q.dateTo);
+      setRangePreset('custom');
+      void loadData(q.dateFrom, q.dateTo);
+    }
+  }, [router.isReady, router.query, loadData]);
+
+  // Fetch product list once on mount for the product filter dropdown.
+  useEffect(() => {
+    const headers: Record<string, string> = {};
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+    void fetch('/api/products', { headers })
+      .then((res) => res.ok ? res.json() as Promise<{ products: { id: string; product_name: string }[] }> : Promise.resolve({ products: [] }))
+      .then((body) => { setProductOptions(body.products.map((p) => p.product_name)); })
+      .catch(() => { /* silently ignore — filter just shows no options */ });
+  }, [session]);
 
   async function handleLogout() {
     const sb = getSupabaseBrowser();
@@ -111,32 +156,42 @@ export default function HomePage() {
     return filterByRange(records, activeRange.start, activeRange.end);
   }, [records, activeRange]);
 
+  // Apply product/fixture/sn/tester filters on top of the date range.
+  const rowsFiltered = useMemo(() => {
+    let rows = rowsInRange;
+    if (product) rows = rows.filter((r) => r.product_name === product);
+    if (fixture) rows = rows.filter((r) => r.fixture_id === fixture);
+    if (sn) rows = rows.filter((r) => r.serial_number === sn);
+    if (tester) rows = rows.filter((r) => r.tester === tester);
+    return rows;
+  }, [rowsInRange, product, fixture, sn, tester]);
+
   const filteredRows = useMemo(() => {
-    if (!summaryFilter) return rowsInRange;
-    if (summaryFilter === 'pass') return rowsInRange.filter((r) => r.result === 'pass');
-    if (summaryFilter === 'fail') return rowsInRange.filter((r) => r.result === 'fail');
+    if (!summaryFilter) return rowsFiltered;
+    if (summaryFilter === 'pass') return rowsFiltered.filter((r) => r.result === 'pass');
+    if (summaryFilter === 'fail') return rowsFiltered.filter((r) => r.result === 'fail');
     if (summaryFilter === 'boards') {
       const seen = new Set<string>();
-      return rowsInRange.filter((r) => {
+      return rowsFiltered.filter((r) => {
         if (seen.has(r.serial_number)) return false;
         seen.add(r.serial_number);
         return true;
       });
     }
-    return rowsInRange;
-  }, [rowsInRange, summaryFilter]);
+    return rowsFiltered;
+  }, [rowsFiltered, summaryFilter]);
 
   const categoryOptions = useMemo(() => {
-    if (!rowsInRange.length) return [];
+    if (!rowsFiltered.length) return [];
     const field = METRIC_FIELD[metric];
     if (!field) return [];
-    return getCategoryOptions(rowsInRange, field);
-  }, [rowsInRange, metric]);
+    return getCategoryOptions(rowsFiltered, field);
+  }, [rowsFiltered, metric]);
 
   const errorInfo = useMemo(() => {
-    if (!rowsInRange.length) return { errors: [], counts: new Map<string, number>() };
-    return buildErrorCounts(rowsInRange);
-  }, [rowsInRange]);
+    if (!rowsFiltered.length) return { errors: [], counts: new Map<string, number>() };
+    return buildErrorCounts(rowsFiltered);
+  }, [rowsFiltered]);
 
   const errorTotals = useMemo(() => {
     const m = new Map<string, number>();
@@ -149,19 +204,19 @@ export default function HomePage() {
   }, [filteredRows]);
 
   const utilizationData = useMemo<UtilizationEntry[]>(() => {
-    if (!rowsInRange.length) return [];
-    return buildUtilization(rowsInRange);
-  }, [rowsInRange]);
+    if (!rowsFiltered.length) return [];
+    return buildUtilization(rowsFiltered);
+  }, [rowsFiltered]);
 
-  // Summary stats (always based on full rowsInRange, not filteredRows)
+  // Summary stats based on rowsFiltered so product/fixture/sn/tester filters propagate here.
   const summaryStats = useMemo(() => {
-    if (!rowsInRange.length) return null;
-    const uniqueBoards = new Set(rowsInRange.map((r) => r.serial_number));
-    const passCount = rowsInRange.filter((r) => r.result === 'pass').length;
-    const failCount = rowsInRange.filter((r) => r.result === 'fail').length;
+    if (!rowsFiltered.length) return null;
+    const uniqueBoards = new Set(rowsFiltered.map((r) => r.serial_number));
+    const passCount = rowsFiltered.filter((r) => r.result === 'pass').length;
+    const failCount = rowsFiltered.filter((r) => r.result === 'fail').length;
 
     const errorCounts: Record<string, number> = {};
-    rowsInRange.forEach((r) => {
+    rowsFiltered.forEach((r) => {
       r.test_errors.forEach((e) => {
         errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
       });
@@ -169,8 +224,8 @@ export default function HomePage() {
     const allErrorsSorted = Object.entries(errorCounts)
       .sort((a, b) => b[1] - a[1]) as Array<[string, number]>;
 
-    return { totalTests: rowsInRange.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, allErrorsSorted };
-  }, [rowsInRange]);
+    return { totalTests: rowsFiltered.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, allErrorsSorted };
+  }, [rowsFiltered]);
 
   // Utilization summary items (for utilization metric)
   const utilizationSummaryItems = useMemo(() => {
@@ -291,6 +346,21 @@ export default function HomePage() {
     setPage(1);
   }
 
+  function handleFixtureClick(value: string) {
+    setFixture((prev) => (prev === value ? '' : value));
+    setPage(1);
+  }
+
+  function handleSnClick(value: string) {
+    setSn((prev) => (prev === value ? '' : value));
+    setPage(1);
+  }
+
+  function handleTesterClick(value: string) {
+    setTester((prev) => (prev === value ? '' : value));
+    setPage(1);
+  }
+
   return (
     <main>
       <header>
@@ -313,6 +383,21 @@ export default function HomePage() {
           >
             ↻
           </button>
+
+          <span className="header-control-group">
+            <label className="header-label" htmlFor="product-select">Product</label>
+            <select
+              id="product-select"
+              className="header-select"
+              value={product}
+              onChange={(e) => { setProduct(e.target.value); setPage(1); }}
+            >
+              <option value="">All products</option>
+              {productOptions.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </span>
 
           <FilterPanel
             onReload={() => void loadData(startDate, endDate)}
@@ -473,6 +558,12 @@ export default function HomePage() {
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
         title={tableTitle}
+        onFixtureClick={handleFixtureClick}
+        onSnClick={handleSnClick}
+        onTesterClick={handleTesterClick}
+        activeFixture={fixture}
+        activeSn={sn}
+        activeTester={tester}
       />
 
       <footer>

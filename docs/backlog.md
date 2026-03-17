@@ -13,6 +13,9 @@
 | B1 | `Threshold:` being parsed into `*_raw` fields as plain text — fixed in `ict-parser.ts` |
 | U1 | "Error types" expand list opened to the right, breaking layout — fixed to expand downward |
 | U2 | Range summary: changed top errors count from 5 → 3 |
+| I1 | Filter state: URL query params seed initial useState values on page mount (Option B) |
+| U3 | Clickable fixture / SN / tester in detail table → apply/toggle as filter |
+| U4 | Product name filter dropdown in header; options fetched from Supabase / fixture |
 
 ---
 
@@ -34,29 +37,6 @@
 
 ## ✨ UI / UX Improvements
 
-### U3 — Clickable fixture / SN / tester in detail table → apply as filter
-**Problem:** No way to quickly filter by a specific board or fixture by clicking on it in the detail table.
-
-**Required behavior:**
-- Clicking `fixture`, `SN`, or `tester` in the detail table applies that value as a filter
-- Filter updates propagate to: graph, detail table, range summary
-
-**Effort:** Medium
-**Dependency:** Resolve filter state architecture (see I1) first.
-
----
-
-### U4 — Product name filter in header
-**Problem:** No way to filter by product name; only one product exists currently but more are planned (see F2).
-
-**Required behavior:**
-- Add a product name filter control in the header, between the reload icon and the date range picker
-- Filter propagates to: graph, detail table, range summary
-
-**Effort:** Medium
-**Dependency:** Resolve filter state architecture (see I1) first. Do alongside U3.
-
----
 
 ### U5 — Error name text filter in error selection lists
 **Problem:** Error selection lists (in the header and in range summary) have no search/filter, making it hard to find specific errors when the list is long.
@@ -98,36 +78,6 @@
 
 ## 🏗️ Infrastructure / Architecture
 
-### I1 — Filter state: migrate from `useState` to URL query parameters
-**Current state:** All filters are held in local `useState`. Not shareable, not bookmarkable, lost on refresh.
-
-**Two approaches — pick one:**
-
-#### Option A: URL as single source of truth
-All filter state lives in the URL (`?product=X&fixture=Y&date=...`). React reads from the URL; user interactions update the URL; components derive state from URL params.
-
-- ✅ Fully shareable and bookmarkable links
-- ✅ Browser back/forward works as filter history
-- ✅ One authoritative source — no sync bugs between URL and state
-- ⚠️ Every filter change triggers a URL push — can feel noisy in the address bar
-- ⚠️ More complex to implement: Next.js App Router requires `useSearchParams` + `useRouter`, and updates must be batched carefully to avoid excessive re-renders
-- ⚠️ Sensitive filter values (e.g. serial numbers) become visible in URLs and browser history
-
-#### Option B: URL sets initial values only (recommended for now)
-On page load, read query params and use them to seed `useState`. After that, state is local. URL is not updated as the user interacts.
-
-- ✅ Simple to implement — one-time read on mount
-- ✅ Supports deep-linking and "share this view" use case if you construct the URL manually
-- ✅ No re-render complexity from URL updates
-- ⚠️ URL drifts from actual state after first interaction — back button does not undo filters
-- ⚠️ Cannot rely on the URL to reflect current state for sharing mid-session
-
-**Recommendation:** Start with Option B. It covers the main use case (pre-setting filters via a shared link) with much less complexity. Option A can be revisited if "shareable live filter state" becomes a real need.
-
-**Effort:** Medium (Option B) / Large (Option A)
-**Dependency:** U3, U4, U6 should all be built on top of whatever architecture is chosen here. Decide this first.
-
----
 
 ## 🚀 Features
 
@@ -161,8 +111,8 @@ On page load, read query params and use them to seed `useState`. After that, sta
 
 ## 📋 Recommended work order
 
-1. **I1** — Decide and implement filter state architecture (Option B recommended). All filter-related work depends on this.
-2. **U3 + U4** — Clickable filters + product filter header. Build on I1.
+1. ~~**I1** — Decide and implement filter state architecture (Option B recommended). All filter-related work depends on this.~~ ✅ Done
+2. ~~**U3 + U4** — Clickable filters + product filter header. Build on I1.~~ ✅ Done
 3. **B2** — Query timeout / data refresh UX. Independent, but affects daily usability.
 4. **U6** — Detail table text filter. Extends I1/U3/U4 filter state.
 5. **U5, U7** — Self-contained UI improvements, do in any order.
