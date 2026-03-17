@@ -99,8 +99,9 @@ ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS measured_raw   text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS nominal_raw    text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS high_limit_raw text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS low_limit_raw  text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_raw  text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS raw_block      text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_raw   text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_value float8;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS raw_block       text;
 
 -- ============================================================
 -- 5. Rolling 3-month delete  (pg_cron)

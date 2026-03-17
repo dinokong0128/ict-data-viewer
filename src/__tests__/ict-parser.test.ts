@@ -388,6 +388,140 @@ describe('parseLog — threshold-style (jumper resistance) error blocks (Bug 2)'
 });
 
 // ---------------------------------------------------------------------------
+// parseLog — B1 fix: threshold_value float field and Subtest: branch scan fix
+// ---------------------------------------------------------------------------
+
+// Threshold-only Subtest: block — no Measured: line.
+// Previously "Threshold: 18.000" would land verbatim in measured_raw (position-based parsing bug).
+const LOG_SUBTEST_THRESHOLD_ONLY = `----------------------------------------
+TestPlan-A-v4.1
+Mon Mar 16 10:00:00 2026
+----------------------------------------
+jp_chk HAS FAILED
+Subtest: Loopback Check
+Threshold: 18.000
+Jumper Resistance in OHMS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-999+SN-XXXX-000099
+&v2S Family: Test Product X
+&v2S ############################
+&v2S #### BOARD ICT FAIL  #####
+&v2S ############################
+&v2S ST:260316100000
+&v2S ET:260316100130
+&v2S SN:PROD-999+SN-XXXX-000099
+&v2S P/N:PART-REDACTED-001 Rev:1
+&v3S Mac:020000000099
+&v2S OPERATOR ID:operator-99
+&v3S Fixture_ID: fixture-01
+&v2S TESTER:tester-01
+`;
+
+// Subtest: block with both Measured: and Threshold: — regression guard.
+const LOG_SUBTEST_WITH_MEASURED = `----------------------------------------
+TestPlan-A-v4.1
+Mon Mar 16 10:00:00 2026
+----------------------------------------
+jp_chk2 HAS FAILED
+Subtest: Full Check
+Measured:   5.500
+Threshold: 10.000
+Jumper Resistance in OHMS
+----------------------------------------
+Board #: 0
+Version:
+S/N:PROD-999+SN-XXXX-000099
+&v2S Family: Test Product X
+&v2S ############################
+&v2S #### BOARD ICT FAIL  #####
+&v2S ############################
+&v2S ST:260316100000
+&v2S ET:260316100130
+&v2S SN:PROD-999+SN-XXXX-000099
+&v2S P/N:PART-REDACTED-001 Rev:1
+&v3S Mac:020000000099
+&v2S OPERATOR ID:operator-99
+&v3S Fixture_ID: fixture-01
+&v2S TESTER:tester-01
+`;
+
+describe('parseLog — B1: threshold_value + Subtest: scan fix', () => {
+  it('Subtest-only-threshold: threshold_raw is the bare value, not "Threshold: ..."', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_SUBTEST_THRESHOLD_ONLY);
+    const err = r.errors.find((e) => e.location === 'jp_chk')!;
+    expect(err).toBeDefined();
+    expect(err.threshold_raw).toBe('18.000');
+    expect(err.threshold_raw).not.toMatch(/Threshold/i);
+  });
+
+  it('Subtest-only-threshold: measured_raw does not contain "Threshold:"', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_SUBTEST_THRESHOLD_ONLY);
+    const err = r.errors.find((e) => e.location === 'jp_chk')!;
+    expect(err.measured_raw).not.toMatch(/Threshold/i);
+  });
+
+  it('Subtest-only-threshold: threshold_value is the correct float', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_SUBTEST_THRESHOLD_ONLY);
+    const err = r.errors.find((e) => e.location === 'jp_chk')!;
+    expect(err.threshold_value).toBeCloseTo(18.0);
+  });
+
+  it('Subtest-only-threshold: subtest is extracted', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_SUBTEST_THRESHOLD_ONLY);
+    const err = r.errors.find((e) => e.location === 'jp_chk')!;
+    expect(err.subtest).toBe('Loopback Check');
+  });
+
+  it('Subtest-only-threshold: error_type is shorts_report', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_SUBTEST_THRESHOLD_ONLY);
+    const err = r.errors.find((e) => e.location === 'jp_chk')!;
+    expect(err.error_type).toBe('shorts_report');
+  });
+
+  it('Subtest-with-measured: measured_raw and threshold_raw both correct (regression)', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_SUBTEST_WITH_MEASURED);
+    const err = r.errors.find((e) => e.location === 'jp_chk2')!;
+    expect(err.measured_raw).toBe('5.500');
+    expect(err.threshold_raw).toBe('10.000');
+    expect(err.threshold_value).toBeCloseTo(10.0);
+    expect(err.subtest).toBe('Full Check');
+  });
+
+  it('threshold_value from LOG_THRESHOLD_COMMON is 10.0', () => {
+    const r = parseLog('PROD-999_SN-XXXX-000099.log', LOG_THRESHOLD_COMMON);
+    const err = r.errors.find((e) => e.location === 'jp_loopback')!;
+    expect(err.threshold_value).toBeCloseTo(10.0);
+  });
+
+  it('threshold_value from unit-suffixed raw (k suffix → *1000)', () => {
+    const r = parseLog('PROD-001_SN-XXXX-000003.log', log000003);
+    const shorts = r.errors.find((e) => e.location === 'pwr_res_chk')!;
+    // threshold_raw is truthy per existing test; threshold_value should be a number
+    expect(typeof shorts.threshold_value).toBe('number');
+    expect(shorts.threshold_value).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseUnitValue — unit suffix conversion
+// ---------------------------------------------------------------------------
+import { parseUnitValue } from '@/lib/ict-parser';
+
+describe('parseUnitValue', () => {
+  it('returns null for null input', () => expect(parseUnitValue(null)).toBeNull());
+  it('returns null for empty string', () => expect(parseUnitValue('')).toBeNull());
+  it('parses plain float', () => expect(parseUnitValue('17.500')).toBeCloseTo(17.5));
+  it('parses u suffix (micro)', () => expect(parseUnitValue('0.78327u')).toBeCloseTo(0.78327e-6));
+  it('parses p suffix (pico)', () => expect(parseUnitValue('233.26p')).toBeCloseTo(233.26e-12));
+  it('parses k suffix (kilo)', () => expect(parseUnitValue('20.000k')).toBeCloseTo(20000));
+  it('parses M suffix (mega)', () => expect(parseUnitValue('1.5612M')).toBeCloseTo(1561200));
+  it('parses m suffix (milli)', () => expect(parseUnitValue('5.000m')).toBeCloseTo(0.005));
+  it('parses n suffix (nano)', () => expect(parseUnitValue('10.000n')).toBeCloseTo(10e-9));
+});
+
+// ---------------------------------------------------------------------------
 // parseLog — raw_block capture (Enhancement)
 // ---------------------------------------------------------------------------
 describe('parseLog — raw_block capture', () => {

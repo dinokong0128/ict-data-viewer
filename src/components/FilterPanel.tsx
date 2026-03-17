@@ -110,7 +110,7 @@ export function FilterPanel({
       ) : null}
 
       {errorOptions.length > 0 && metric === 'errors' ? (
-        <span className="header-control-group">
+        <span className="header-control-group header-control-group--wrap">
           <span className="header-label">
             Error types ({selectedErrors.size === 0 ? errorOptions.length : selectedErrors.size} of {errorOptions.length})
           </span>
