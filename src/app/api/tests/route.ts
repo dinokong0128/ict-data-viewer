@@ -30,11 +30,9 @@ function getSupabaseForUser(authHeader: string): SupabaseClient {
 }
 
 async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string): Promise<TestRecord[]> {
-  // Supabase PostgREST caps responses at max_rows (server default 1000) per request.
+  // Supabase PostgREST caps responses at max_rows (default 1000) per request.
   // Use .range() in a loop to paginate past that limit and retrieve all records.
-  // Advance by data.length (not a fixed BATCH) so the loop is correct regardless
-  // of the server's max_rows setting. Stop only when the page is empty.
-  const PAGE_SIZE = 1000;
+  const BATCH = 1000;
   const allRows: any[] = [];
   let from = 0;
 
@@ -51,13 +49,14 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
       .lte('start_time', end + 'T23:59:59Z')
       .order('start_time', { ascending: false })
       .order('id', { ascending: false })
-      .range(from, from + PAGE_SIZE - 1);
+      .range(from, from + BATCH - 1);
 
     if (error) throw new Error(`Supabase query failed: ${error.message}`);
     if (!data || data.length === 0) break;
 
     allRows.push(...data);
-    from += data.length; // advance by actual rows returned, not PAGE_SIZE
+    if (data.length < BATCH) break; // last page reached
+    from += BATCH;
   }
 
   return allRows.map((row: any): TestRecord => ({
