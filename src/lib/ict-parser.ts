@@ -24,17 +24,18 @@ export interface ParsedTest {
 }
 
 export interface ParsedError {
-  error_type:     'analog' | 'digital_pin' | 'shorts_report' | 'unknown';
-  location:       string;       // PCB component reference (was: component)
-  subtest:        string | null;
-  part_spec:      string;       // component value, e.g. "1UF" (was: component_value)
-  unit:           string;       // "FARADS" | "OHMS" | ""
-  measured_raw:   string;
-  nominal_raw:    string;
-  high_limit_raw: string;
-  low_limit_raw:  string;
-  threshold_raw:  string | null;
-  raw_block:      string | null; // raw lines that produced this error; null if not captured
+  error_type:      'analog' | 'digital_pin' | 'shorts_report' | 'unknown';
+  location:        string;       // PCB component reference (was: component)
+  subtest:         string | null;
+  part_spec:       string;       // component value, e.g. "1UF" (was: component_value)
+  unit:            string;       // "FARADS" | "OHMS" | ""
+  measured_raw:    string;
+  nominal_raw:     string;
+  high_limit_raw:  string;
+  low_limit_raw:   string;
+  threshold_raw:   string | null;
+  threshold_value: number | null; // threshold_raw parsed to base-unit float
+  raw_block:       string | null; // raw lines that produced this error; null if not captured
 }
 
 const SEPARATOR = '----------------------------------------';
@@ -51,6 +52,23 @@ export function parseTimestamp(ts: string): Date {
   const min = parseInt(s.slice(8, 10), 10);
   const sec = parseInt(s.slice(10, 12), 10);
   return new Date(Date.UTC(year, month, day, hour, min, sec));
+}
+
+/**
+ * Convert a raw ICT value string with an optional SI suffix to a base-unit float.
+ * Suffixes: p=1e-12, n=1e-9, u=1e-6, m=1e-3, k=1e3, M=1e6, G=1e9
+ * Returns null when the input is null/empty or cannot be parsed.
+ */
+export function parseUnitValue(raw: string | null): number | null {
+  if (!raw) return null;
+  const m = raw.trim().match(/^([+-]?\d+(?:\.\d+)?)([pnumkMG]?)$/);
+  if (!m) return null;
+  const num = parseFloat(m[1]);
+  const suffixMap: Record<string, number> = {
+    p: 1e-12, n: 1e-9, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9,
+  };
+  const scale = m[2] ? (suffixMap[m[2]] ?? 1) : 1;
+  return num * scale;
 }
 
 /**
@@ -187,25 +205,24 @@ export function parseLog(filename: string, content: string): ParsedTest {
           j++;
         }
       } else if (/^Subtest:/i.test(defLine)) {
-        // Resistance/shorts check with subtest
+        // Resistance/shorts check with subtest.
+        // Content-based scan handles blocks that have Measured: and/or Threshold: in any order,
+        // and correctly handles blocks where Measured: is absent (threshold-only variant).
         error_type = 'shorts_report';
         subtest = defLine.replace(/^Subtest:\s*/i, '').trim();
         j++;
-        // measured_raw
-        const measLine = (lines[j] ?? '').trimEnd();
-        measured_raw = measLine.replace(/^Measured:\s*/i, '').trim();
-        j++;
-        // threshold_raw
-        const threshLine = (lines[j] ?? '').trimEnd();
-        if (/^Threshold:/i.test(threshLine)) {
-          threshold_raw = threshLine.replace(/^Threshold:\s*/i, '').trim();
+        while (j < lines.length) {
+          const scanLine = (lines[j] ?? '').trimEnd();
+          if (scanLine === SEPARATOR || /\bHAS FAILED\b/i.test(scanLine)) break;
+          if (/^Measured:\s*/i.test(scanLine)) {
+            measured_raw = scanLine.replace(/^Measured:\s*/i, '').trim();
+          } else if (/^Threshold:\s*/i.test(scanLine)) {
+            threshold_raw = scanLine.replace(/^Threshold:\s*/i, '').trim();
+          }
+          const unitMatch = scanLine.match(/\bin\s+(FARADS|OHMS)\b/i);
+          if (unitMatch) unit = unitMatch[1].toUpperCase();
           j++;
         }
-        // unit line: "Jumper Resistance in OHMS" etc.
-        const unitLine = (lines[j] ?? '').trimEnd();
-        const unitMatch = unitLine.match(/\bin\s+(FARADS|OHMS)\b/i);
-        unit = unitMatch ? unitMatch[1].toUpperCase() : '';
-        j++;
       } else {
         // Standard analog or threshold-style (jumper resistance) failure.
         // Try to extract COMP=value from the definition line first.
@@ -245,6 +262,8 @@ export function parseLog(filename: string, content: string): ParsedTest {
       // Capture the raw lines that produced this error record (from HAS FAILED up to j).
       const raw_block = lines.slice(blockStart, j).join('\n');
 
+      const threshold_value = parseUnitValue(threshold_raw);
+
       // Deduplicate by location (keep first occurrence)
       if (!errorMap.has(location)) {
         errorMap.set(location, {
@@ -258,6 +277,7 @@ export function parseLog(filename: string, content: string): ParsedTest {
           high_limit_raw,
           low_limit_raw,
           threshold_raw,
+          threshold_value,
           raw_block,
         });
       }

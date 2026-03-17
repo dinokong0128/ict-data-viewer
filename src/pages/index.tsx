@@ -430,7 +430,7 @@ export default function HomePage() {
               <li>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Top errors</span>
-                  {summaryStats.allErrorsSorted.length > 5 && (
+                  {summaryStats.allErrorsSorted.length > 3 && (
                     <button
                       type="button"
                       className="summary-num"
@@ -446,7 +446,7 @@ export default function HomePage() {
                   <ul style={{ listStyle: 'none', padding: 0, margin: '8px 0 0', display: 'grid', gap: '4px' }}>
                     {(summaryErrorsExpanded
                       ? summaryStats.allErrorsSorted
-                      : summaryStats.allErrorsSorted.slice(0, 5)
+                      : summaryStats.allErrorsSorted.slice(0, 3)
                     ).map(([loc, count]) => (
                       <li key={loc} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                         <span>{loc}</span>

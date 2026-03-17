@@ -61,6 +61,11 @@ header p {
   gap: 6px;
 }
 
+.header-control-group--wrap {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
 .header-label {
   font-size: 12px;
   font-weight: 600;
