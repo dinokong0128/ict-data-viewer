@@ -21,7 +21,7 @@
 
 ## 🐛 Bugs
 
-### B2 — Query timeout / data refresh UX
+### ✅ B2 — Query timeout / data refresh UX
 **Problem:** The frontend occasionally shows a query timeout error, likely correlated with large data imports running concurrently. Additionally, when a data refresh fails, the UI flushes existing data — leaving the user with an empty view instead of stale-but-usable data.
 
 **Required behavior:**
@@ -32,6 +32,14 @@
 
 **Effort:** Medium
 **Notes:** Investigate whether Supabase query timeouts can be tuned (statement_timeout). Also check if the hourly ingest job causes DB load spikes that overlap with frontend queries.
+
+**Done (2026-03-17):**
+- Removed `setRecords([])` from `loadData` error handler — stale data preserved on refresh failure
+- Added `hasDataRef` to distinguish "initial load error" (show raw error) from "refresh failure" (show "Last refresh failed — showing previous data")
+- Added `AbortController` + `QUERY_TIMEOUT_MS = 15_000` constant — queries now fail fast after 15s instead of hanging on browser default (~2 min)
+- `finally` block clears the abort timer in all code paths
+- Fixed `GET /api/tests`: raised `BATCH` from 1000 → 5000 (matching Supabase `max_rows` config); replaced `SELECT *` with explicit column list
+- No polling found during audit; no overly aggressive refetch triggers
 
 ---
 

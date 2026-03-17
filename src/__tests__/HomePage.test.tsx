@@ -214,4 +214,77 @@ describe('HomePage', () => {
     fireEvent.change(productSelect, { target: { value: 'Test Product A' } });
     expect(productSelect.value).toBe('Test Product A');
   });
+
+  describe('error and timeout behaviour', () => {
+    it('keeps existing records when a subsequent fetch fails', async () => {
+      // First fetch succeeds — loads one record.
+      render(<HomePage />);
+      await waitFor(() => {
+        const items = screen.getAllByRole('listitem');
+        expect(items.some((el) => /Total tests: 1/i.test(el.textContent ?? ''))).toBe(true);
+      });
+
+      // Second fetch (reload) fails — records must stay visible.
+      (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.resolve({
+            ok: false,
+            json: async () => ({ error: 'DB unavailable' }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      const reloadBtn = screen.getByTitle('Reload data');
+      fireEvent.click(reloadBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Last refresh failed/i)).toBeInTheDocument();
+      });
+
+      // Record from the first successful load must still render.
+      const items = screen.getAllByRole('listitem');
+      expect(items.some((el) => /Total tests: 1/i.test(el.textContent ?? ''))).toBe(true);
+    });
+
+    it('shows error banner (not full-page error) when refresh fails with stale data', async () => {
+      render(<HomePage />);
+      await waitFor(() => screen.getAllByRole('listitem'));
+
+      (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.resolve({ ok: false, json: async () => ({ error: 'timeout' }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      fireEvent.click(screen.getByTitle('Reload data'));
+
+      await waitFor(() => {
+        const banner = screen.getByText(/Last refresh failed/i);
+        // Banner must be in a section (non-modal, non-full-page element).
+        expect(banner.closest('section')).not.toBeNull();
+      });
+    });
+
+    it('shows timeout message when fetch is aborted', async () => {
+      render(<HomePage />);
+      await waitFor(() => screen.getAllByRole('listitem'));
+
+      (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.reject(
+            Object.assign(new DOMException('The user aborted a request.', 'AbortError'), {}),
+          );
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      fireEvent.click(screen.getByTitle('Reload data'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/timed out/i)).toBeInTheDocument();
+      });
+    });
+  });
 });

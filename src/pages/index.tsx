@@ -35,6 +35,9 @@ const METRIC_FIELD: MetricToField = {
 
 type SummaryFilter = 'pass' | 'fail' | 'boards' | null;
 
+/** Cap frontend queries at this duration; tune here if needed. */
+const QUERY_TIMEOUT_MS = 15_000;
+
 export default function HomePage() {
   const router = useRouter();
   const { session, role, isGuest } = useAuth();
@@ -61,19 +64,25 @@ export default function HomePage() {
   // stale responses (e.g. the default 30-day load racing the URL-seeded load) are
   // discarded before they can overwrite the result of the most recent request.
   const loadIdRef = useRef(0);
+  // True once the first successful fetch has resolved; used to pick the right
+  // error message (stale-data fallback vs. hard initial-load failure).
+  const hasDataRef = useRef(false);
 
   const loadData = useCallback(async (start: string, end: string) => {
     if (!start || !end) return;
     const myId = ++loadIdRef.current;
-    try {
-      setStatus('Loading data...');
+    setStatus('Loading data...');
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), QUERY_TIMEOUT_MS);
+
+    try {
       const headers: Record<string, string> = {};
       if (session?.access_token) {
         headers['Authorization'] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch(`/api/tests?start=${start}&end=${end}`, { headers });
+      const res = await fetch(`/api/tests?start=${start}&end=${end}`, { headers, signal: controller.signal });
       if (!res.ok) {
         const body = (await res.json()) as { error?: string };
         throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -81,11 +90,18 @@ export default function HomePage() {
       const body = (await res.json()) as { records: TestRecord[]; demo: boolean };
       if (myId !== loadIdRef.current) return;
       setRecords(body.records);
+      hasDataRef.current = true;
       setStatus(null);
     } catch (err) {
       if (myId !== loadIdRef.current) return;
-      setStatus(err instanceof Error ? err.message : 'Unable to load data.');
-      setRecords([]);
+      const isTimeout = err instanceof DOMException && err.name === 'AbortError';
+      const rawMsg = isTimeout
+        ? `Request timed out after ${QUERY_TIMEOUT_MS / 1000}s`
+        : (err instanceof Error ? err.message : 'Unable to load data.');
+      // Keep stale records visible — only update the status message.
+      setStatus(hasDataRef.current ? `Last refresh failed — showing previous data (${rawMsg})` : rawMsg);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }, [session]);
 

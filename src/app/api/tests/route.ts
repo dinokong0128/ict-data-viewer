@@ -30,9 +30,10 @@ function getSupabaseForUser(authHeader: string): SupabaseClient {
 }
 
 async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string): Promise<TestRecord[]> {
-  // Supabase PostgREST caps responses at max_rows (default 1000) per request.
-  // Use .range() in a loop to paginate past that limit and retrieve all records.
-  const BATCH = 1000;
+  // Supabase project has max_rows set to 5000. Paginate in batches of 5000 so
+  // the common case (≤5000 rows) is a single round trip; larger ranges still
+  // paginate correctly.
+  const BATCH = 5000;
   const allRows: any[] = [];
   let from = 0;
 
@@ -40,7 +41,7 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
     const { data, error } = await sb
       .from('tests')
       .select(`
-        *,
+        id, board_id, start_time, end_time, result, operator_id, fixture_id, tester, source_file, ingested_at,
         boards!inner (serial_number, mac_address, rev, product_id,
           products!inner (product_name, part_number)),
         test_errors (error_type, location, subtest, part_spec, unit, measured_raw, nominal_raw, high_limit_raw, low_limit_raw, threshold_raw)
