@@ -57,8 +57,14 @@ export default function HomePage() {
   const [tester, setTester] = useState('');
   const [productOptions, setProductOptions] = useState<string[]>([]);
 
+  // Incremented on every loadData call; each call captures its own snapshot so
+  // stale responses (e.g. the default 30-day load racing the URL-seeded load) are
+  // discarded before they can overwrite the result of the most recent request.
+  const loadIdRef = useRef(0);
+
   const loadData = useCallback(async (start: string, end: string) => {
     if (!start || !end) return;
+    const myId = ++loadIdRef.current;
     try {
       setStatus('Loading data...');
 
@@ -73,9 +79,11 @@ export default function HomePage() {
         throw new Error(body.error ?? `HTTP ${res.status}`);
       }
       const body = (await res.json()) as { records: TestRecord[]; demo: boolean };
+      if (myId !== loadIdRef.current) return;
       setRecords(body.records);
       setStatus(null);
     } catch (err) {
+      if (myId !== loadIdRef.current) return;
       setStatus(err instanceof Error ? err.message : 'Unable to load data.');
       setRecords([]);
     }
