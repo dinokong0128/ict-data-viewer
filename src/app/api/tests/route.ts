@@ -30,22 +30,35 @@ function getSupabaseForUser(authHeader: string): SupabaseClient {
 }
 
 async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string): Promise<TestRecord[]> {
-  const { data, error } = await sb
-    .from('tests')
-    .select(`
-      *,
-      boards!inner (serial_number, mac_address, rev, product_id,
-        products!inner (product_name, part_number)),
-      test_errors (error_type, location, subtest, part_spec, unit, measured_raw, nominal_raw, high_limit_raw, low_limit_raw, threshold_raw)
-    `)
-    .gte('start_time', start)
-    .lte('start_time', end + 'T23:59:59Z')
-    .order('start_time', { ascending: false })
-    .limit(5000);
+  // Supabase PostgREST caps responses at max_rows (default 1000) per request.
+  // Use .range() in a loop to paginate past that limit and retrieve all records.
+  const BATCH = 1000;
+  const allRows: any[] = [];
+  let from = 0;
 
-  if (error) throw new Error(`Supabase query failed: ${error.message}`);
+  while (true) {
+    const { data, error } = await sb
+      .from('tests')
+      .select(`
+        *,
+        boards!inner (serial_number, mac_address, rev, product_id,
+          products!inner (product_name, part_number)),
+        test_errors (error_type, location, subtest, part_spec, unit, measured_raw, nominal_raw, high_limit_raw, low_limit_raw, threshold_raw)
+      `)
+      .gte('start_time', start)
+      .lte('start_time', end + 'T23:59:59Z')
+      .order('start_time', { ascending: false })
+      .range(from, from + BATCH - 1);
 
-  return (data ?? []).map((row: any): TestRecord => ({
+    if (error) throw new Error(`Supabase query failed: ${error.message}`);
+    if (!data || data.length === 0) break;
+
+    allRows.push(...data);
+    if (data.length < BATCH) break; // last page reached
+    from += BATCH;
+  }
+
+  return allRows.map((row: any): TestRecord => ({
     id:           row.id,
     board_id:     row.board_id,
     start_time:   row.start_time,
