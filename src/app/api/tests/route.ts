@@ -48,6 +48,7 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
       .gte('start_time', start)
       .lte('start_time', end + 'T23:59:59Z')
       .order('start_time', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, from + BATCH - 1);
 
     if (error) throw new Error(`Supabase query failed: ${error.message}`);
