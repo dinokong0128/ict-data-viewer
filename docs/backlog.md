@@ -77,7 +77,7 @@
 
 **Dependencies:** `user_roles` gating, dedicated read-only DB role/path, one concrete provider implementation, provider API key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`)
 
-**Detailed design:** see project design doc / Google Doc for semantic layer, field mapping, `ChatQueryPlan`, examples, and testing strategy.
+**Detailed design:** see project [design doc / Google Doc](https://docs.google.com/document/d/1ITqxmd5sucV5LlRGBSFtkmju1gnQLLlJqCnx_28L7P8/) for semantic layer, field mapping, `ChatQueryPlan`, examples, and testing strategy.
 
 **Implementation note:** Do not start with raw schema → arbitrary LLM SQL. First define the semantic layer and `ChatQueryPlan`, then build validation, SQL compilation, and grounded answering.
 
