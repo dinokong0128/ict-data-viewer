@@ -1,6 +1,6 @@
 # ICT Data Viewer — Project Backlog
 
-> Last updated: 2026-03-17
+> Last updated: 2026-03-18
 > Stack: Next.js (App Router), React, TypeScript, Supabase, Vercel
 > Repo: https://github.com/dinokong0128/ict-data-viewer (branch: `develop`)
 
@@ -18,30 +18,11 @@
 | U4 | Product name filter dropdown in header; options fetched from Supabase / fixture |
 | U5 | Error name text filter in error selection lists (header + range summary); shared `useErrorSearch` hook + `ErrorSearchInput` component |
 | U7 | Detail table errors column: foldable with readings sub-table (first 3 collapsed, "Show all (N)" expands inline table with measured/limits/unit) |
+| B2 | Query timeout / data refresh UX — stale data preserved on refresh failure; AbortController with 15s timeout; API batch raised 1000→5000 |
 
 ---
 
 ## 🐛 Bugs
-
-### ✅ B2 — Query timeout / data refresh UX
-**Problem:** The frontend occasionally shows a query timeout error, likely correlated with large data imports running concurrently. Additionally, when a data refresh fails, the UI flushes existing data — leaving the user with an empty view instead of stale-but-usable data.
-
-**Required behavior:**
-- On refresh failure, keep the previously loaded data visible; show a non-blocking error indicator (e.g. a banner or icon) instead of clearing the view
-- Audit all data-fetching hooks/functions: identify polling intervals, refetch triggers, and any `useEffect` chains that wipe state before the new fetch resolves
-- Consider adding request timeout configuration and retry logic with exponential backoff
-- Ensure the loading/error/success states are clearly distinct in the UI
-
-**Effort:** Medium
-**Notes:** Investigate whether Supabase query timeouts can be tuned (statement_timeout). Also check if the hourly ingest job causes DB load spikes that overlap with frontend queries.
-
-**Done (2026-03-17):**
-- Removed `setRecords([])` from `loadData` error handler — stale data preserved on refresh failure
-- Added `hasDataRef` to distinguish "initial load error" (show raw error) from "refresh failure" (show "Last refresh failed — showing previous data")
-- Added `AbortController` + `QUERY_TIMEOUT_MS = 15_000` constant — queries now fail fast after 15s instead of hanging on browser default (~2 min)
-- `finally` block clears the abort timer in all code paths
-- Fixed `GET /api/tests`: raised `BATCH` from 1000 → 5000 (matching Supabase `max_rows` config); replaced `SELECT *` with explicit column list
-- No polling found during audit; no overly aggressive refetch triggers
 
 ---
 
@@ -98,7 +79,7 @@
 
 1. ~~**I1** — Decide and implement filter state architecture (Option B recommended). All filter-related work depends on this.~~ ✅ Done
 2. ~~**U3 + U4** — Clickable filters + product filter header. Build on I1.~~ ✅ Done
-3. **B2** — Query timeout / data refresh UX. Independent, but affects daily usability.
+3. ~~**B2** — Query timeout / data refresh UX. Independent, but affects daily usability.~~ ✅ Done
 4. **U6** — Detail table text filter. Extends I1/U3/U4 filter state.
 5. ~~**U5, U7** — Self-contained UI improvements, do in any order.~~ ✅ Done
 6. **F1** — AI chat. Highest payoff, all prerequisites in place by this point.
