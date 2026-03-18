@@ -16,6 +16,8 @@
 | I1 | Filter state: URL query params seed initial useState values on page mount (Option B) |
 | U3 | Clickable fixture / SN / tester in detail table → apply/toggle as filter |
 | U4 | Product name filter dropdown in header; options fetched from Supabase / fixture |
+| U5 | Error name text filter in error selection lists (header + range summary); shared `useErrorSearch` hook + `ErrorSearchInput` component |
+| U7 | Detail table errors column: foldable with readings sub-table (first 3 collapsed, "Show all (N)" expands inline table with measured/limits/unit) |
 
 ---
 
@@ -38,18 +40,6 @@
 ## ✨ UI / UX Improvements
 
 
-### U5 — Error name text filter in error selection lists
-**Problem:** Error selection lists (in the header and in range summary) have no search/filter, making it hard to find specific errors when the list is long.
-
-**Required behavior:**
-- Add a text input to filter error names in both the header error selector and the range summary error selector
-- Same pattern in both locations — build once, reuse
-
-**Effort:** Small
-**Notes:** Self-contained, no shared filter state changes needed.
-
----
-
 ### U6 — Detail table: global filter text box
 **Problem:** No free-text search across the detail table. Filters currently require clicking specific fields (post-U3) or using header controls.
 
@@ -60,19 +50,6 @@
 
 **Effort:** Medium-Large
 **Dependency:** Do after U3 + U4. U6 should be an extension of the shared filter state established there — not a parallel implementation. Doing U6 standalone risks duplicate/conflicting filter logic.
-
----
-
-### U7 — Detail table "errors" column: foldable with readings
-**Problem:** The errors column can be very long, making rows hard to scan. Individual error readings (measured value, limits, threshold, unit) are not visible in the table view.
-
-**Required behavior:**
-- Show first 3 errors collapsed by default
-- "Show all" expands to a sub-table with all errors and their readings: `measured_value`, `high_limit`, `low_limit`, `threshold`, `unit`
-- Collapse/expand is per-row
-
-**Effort:** Medium
-**Notes:** Pure UI change — all readings data is already in `test_errors`. No query changes needed.
 
 ---
 
@@ -115,6 +92,6 @@
 2. ~~**U3 + U4** — Clickable filters + product filter header. Build on I1.~~ ✅ Done
 3. **B2** — Query timeout / data refresh UX. Independent, but affects daily usability.
 4. **U6** — Detail table text filter. Extends I1/U3/U4 filter state.
-5. **U5, U7** — Self-contained UI improvements, do in any order.
+5. ~~**U5, U7** — Self-contained UI improvements, do in any order.~~ ✅ Done
 6. **F1** — AI chat. Highest payoff, all prerequisites in place by this point.
 7. **F2** — When a sample log file is available.
