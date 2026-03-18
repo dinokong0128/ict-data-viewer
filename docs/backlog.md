@@ -36,7 +36,7 @@
 
 ## 🚀 Features
 
-### F1 — AI-powered chat (ict-manager / ict-admin only)
+### ✅ F1 — AI-powered chat (ict-manager / ict-admin only)
 
 **Description:** Natural-language analytics for ICT data. Engineers can ask about top errors, fail trends, fail counts by tester/fixture/product, or serial-number history. The system returns a grounded answer and, when useful, a table or chart.
 
@@ -88,5 +88,5 @@
 3. ~~**B2** — Query timeout / data refresh UX. Independent, but affects daily usability.~~ ✅ Done
 4. ~~**U6** — Detail table text filter. Extends I1/U3/U4 filter state.~~ ✅ Done
 5. ~~**U5, U7** — Self-contained UI improvements, do in any order.~~ ✅ Done
-6. **F1** — AI chat. Highest payoff, all prerequisites in place by this point.
+6. ~~**F1** — AI chat. Highest payoff, all prerequisites in place by this point.~~ ✅ Done
 7. **F2** — When a sample log file is available.

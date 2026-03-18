@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ChartPanel, type ChartDataset } from '@/components/ChartPanel';
+import { AiChatPanel } from '@/components/AiChatPanel';
 import { DetailTable } from '@/components/DetailTable';
 import { FilterPanel } from '@/components/FilterPanel';
 import { StatusBanner } from '@/components/StatusBanner';
@@ -568,12 +569,6 @@ export default function HomePage() {
             }}
           />
 
-          {/* TODO: AI chat entry point — place chat button/panel here.
-              Visible to ict-manager and ict-admin only (see showAiChat flag). */}
-          {showAiChat && (
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>{/* AI chat placeholder */}</span>
-          )}
-
           {!isGuest && (
             <button
               type="button"
@@ -696,6 +691,8 @@ export default function HomePage() {
           ) : null}
         </div>
       </section>
+
+      {showAiChat && <AiChatPanel session={session} />}
 
       <DetailTable
         rows={tableRows}
