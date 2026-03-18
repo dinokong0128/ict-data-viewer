@@ -47,23 +47,44 @@
 
 ## 🚀 Features
 
+Two things are now ready for you:
+
+1. **`docs/ai-chat-design.md` has been created in your repo** with the full design document for F1.
+2. Below is the **updated F1 spec you should paste into `docs/backlog.md`**.
+
+---
 ### F1 — AI-powered chat (ict-manager / ict-admin only)
-**Description:** Natural language interface for querying ICT data. Engineers type a question; the app generates a SQL query, runs it, and returns a grounded answer — with graph/table/range summary rendered when appropriate.
 
-**Architecture (designed in prior session):**
-- `POST /api/chat` — takes `{ question: string }`, returns `{ answer, sql, rows }`
-- Pass 1: send Claude the schema + question → returns a `SELECT` SQL query
-- Pass 2: run SQL on Supabase → send rows + question back to Claude → returns plain-English answer
-- Read-only Postgres role for the chat route (never expose service role key)
+**Description:** Natural-language analytics for ICT data. Engineers can ask about top errors, fail trends, fail counts by tester/fixture/product, or serial-number history. The system returns a grounded answer and, when useful, a table or chart.
 
-**UI placement:**
-- Chat input accessible to `ict-manager` and `ict-admin` roles only (gate via `user_roles`)
-- Text answer displayed between graph and detail table
-- Expandable drawer showing the AI-generated SQL
+**v1 scope:**
+- Supported query types: `summary`, `top_n`, `trend`, `compare`, `lookup`
+- `POST /api/chat` receives `{ question }`
+- LLM returns structured `ChatQueryPlan` JSON
+- Server validates the plan, compiles SQL, applies guardrails, runs a read-only query, then generates a grounded answer
+- UI shows answer first, with expandable debug details (SQL, row count, warnings)
 
-**Effort:** Large
-**Dependencies:** Auth/role gating already in schema (`user_roles`). Read-only Postgres role needs to be created. `ANTHROPIC_API_KEY` needs to be added to Vercel env vars.
+**Guardrails:**
+- Never use `SUPABASE_SERVICE_KEY` for chat queries
+- Read-only access only
+- `SELECT` only, single statement only
+- Allowlisted query shapes / fields only
+- Enforce row limits and timeout
+- If the question is ambiguous or data is insufficient, say so explicitly
 
+**Suggested modules:**
+- `src/app/api/chat/route.ts`
+- `src/lib/ai/chat-plan.ts`
+- `src/lib/ai/sql-compiler.ts`
+- `src/lib/ai/sql-guard.ts`
+- `src/lib/ai/chat-answer.ts`
+- `src/lib/ai/chat-provider.ts`
+
+**Dependencies:** `user_roles` gating, dedicated read-only DB role/path, provider API key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`)
+
+**Detailed design:** see project design doc / Google Doc for semantic layer, `ChatQueryPlan`, examples, and testing strategy.
+
+**Implementation note:** Do not start with raw schema → arbitrary LLM SQL. First define the semantic layer and `ChatQueryPlan`, then build validation, SQL compilation, and grounded answering.
 ---
 
 ### F2 — Import additional products + extend parser
