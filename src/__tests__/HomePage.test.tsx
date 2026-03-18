@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import HomePage from '@/pages/index';
 import type { TestRecord } from '@/lib/testUtils';
 
@@ -67,8 +67,7 @@ const MOCK_RECORD: TestRecord = {
 
 beforeEach(() => {
   mockUseAuth.mockReturnValue({
-    session:   { access_token: 'test-jwt' },
-    user:      { id: 'user-1' },
+    session:   { access_token: 'test-jwt', user: { id: 'user-1' } },
     role:      'ict-manager',
     isGuest:   false,
     isLoading: false,
@@ -213,5 +212,121 @@ describe('HomePage', () => {
 
     fireEvent.change(productSelect, { target: { value: 'Test Product A' } });
     expect(productSelect.value).toBe('Test Product A');
+  });
+
+  describe('error and timeout behaviour', () => {
+    it('keeps existing records when a subsequent fetch fails', async () => {
+      // First fetch succeeds — loads one record.
+      render(<HomePage />);
+      await waitFor(() => {
+        const items = screen.getAllByRole('listitem');
+        expect(items.some((el) => /Total tests: 1/i.test(el.textContent ?? ''))).toBe(true);
+      });
+
+      // Second fetch (reload) fails — records must stay visible.
+      (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.resolve({
+            ok: false,
+            json: async () => ({ error: 'DB unavailable' }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      const reloadBtn = screen.getByTitle('Reload data');
+      fireEvent.click(reloadBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Last refresh failed/i)).toBeInTheDocument();
+      });
+
+      // Record from the first successful load must still render.
+      const items = screen.getAllByRole('listitem');
+      expect(items.some((el) => /Total tests: 1/i.test(el.textContent ?? ''))).toBe(true);
+    });
+
+    it('shows error banner (not full-page error) when refresh fails with stale data', async () => {
+      render(<HomePage />);
+      await waitFor(() => screen.getAllByRole('listitem'));
+
+      (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.resolve({ ok: false, json: async () => ({ error: 'timeout' }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      fireEvent.click(screen.getByTitle('Reload data'));
+
+      await waitFor(() => {
+        const banner = screen.getByText(/Last refresh failed/i);
+        // Banner must be in a section (non-modal, non-full-page element).
+        expect(banner.closest('section')).not.toBeNull();
+      });
+    });
+
+    it('shows timeout message when fetch is aborted', async () => {
+      render(<HomePage />);
+      await waitFor(() => screen.getAllByRole('listitem'));
+
+      (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.reject(
+            Object.assign(new DOMException('The user aborted a request.', 'AbortError'), {}),
+          );
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      fireEvent.click(screen.getByTitle('Reload data'));
+
+      await waitFor(() => {
+        expect(screen.getByText(/timed out/i)).toBeInTheDocument();
+      });
+    });
+
+    it('clears stale authenticated data when the session signs out', async () => {
+      const { rerender } = render(<HomePage />);
+
+      // Wait for initial successful load — record should be visible.
+      await waitFor(() => {
+        const items = screen.getAllByRole('listitem');
+        expect(items.some((el) => /Total tests: 1/i.test(el.textContent ?? ''))).toBe(true);
+      });
+
+      // Simulate sign-out: session becomes null; API now returns 401 (realistic — the
+      // server rejects unauthenticated requests).  This also exercises the path where
+      // hasDataRef has been reset to false, so the error message is the raw error (not
+      // the "showing previous data" stale-data message).
+      mockUseAuth.mockReturnValue({
+        session:   null,
+        role:      null,
+        isGuest:   false,
+        isLoading: false,
+      });
+      (global.fetch as jest.Mock).mockImplementation((url: string) => {
+        if ((url as string).includes('/api/tests')) {
+          return Promise.resolve({ ok: false, json: async () => ({ error: 'Unauthorized' }) });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+      });
+
+      // Re-render triggers the identity-change useEffect (records cleared, hasDataRef reset)
+      // and the rangePreset effect (new loadData due to session change → fetch fails → raw error,
+      // NOT the "showing previous data" banner, because hasDataRef was already reset).
+      await act(async () => {
+        rerender(<HomePage />);
+      });
+
+      // No stale records should remain in the DOM after the sign-out.
+      await waitFor(() => {
+        const items = screen.queryAllByRole('listitem');
+        expect(items.some((el) => /Total tests: 1/i.test(el.textContent ?? ''))).toBe(false);
+      });
+
+      // Stale-data banner must NOT be shown (hasDataRef was reset before the failed fetch).
+      expect(screen.queryByText(/showing previous data/i)).toBeNull();
+    });
   });
 });
