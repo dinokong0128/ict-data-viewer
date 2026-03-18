@@ -10,7 +10,24 @@ jest.mock('@/components/ChartPanel', () => ({
 }));
 
 jest.mock('@/components/DetailTable', () => ({
-  DetailTable: ({ title }: { title: string }) => <div>{title}</div>,
+  DetailTable: ({ title, textFilter, onTextFilterChange }: {
+    title: string;
+    textFilter?: string;
+    onTextFilterChange?: (v: string) => void;
+  }) => (
+    <div>
+      <div>{title}</div>
+      <input
+        placeholder="Search SN, product, tester, fixture, operator, errors..."
+        value={textFilter ?? ''}
+        onChange={(e) => onTextFilterChange?.(e.target.value)}
+        aria-label="Filter table rows"
+      />
+      {textFilter && (
+        <button aria-label="Clear filter" onClick={() => onTextFilterChange?.('')}>✕</button>
+      )}
+    </div>
+  ),
 }));
 
 const mockUseAuth = jest.fn();
@@ -212,6 +229,189 @@ describe('HomePage', () => {
 
     fireEvent.change(productSelect, { target: { value: 'Test Product A' } });
     expect(productSelect.value).toBe('Test Product A');
+  });
+
+  describe('U6 — text filter', () => {
+    const RECORD_A: TestRecord = {
+      ...MOCK_RECORD,
+      id: 10,
+      serial_number: 'SN-ALPHA-001',
+      product_name: 'Alpha Board',
+      tester: 'tester-alpha',
+      fixture_id: 'fix-alpha',
+      operator_id: 'op-alpha',
+      board_id: 'SN-ALPHA-001',
+      test_errors: [],
+    };
+    const RECORD_B: TestRecord = {
+      ...MOCK_RECORD,
+      id: 11,
+      serial_number: 'SN-BETA-002',
+      product_name: 'Beta Board',
+      tester: 'tester-beta',
+      fixture_id: 'fix-beta',
+      operator_id: 'op-beta',
+      board_id: 'SN-BETA-002',
+      test_errors: [],
+    };
+    const RECORD_WITH_ERROR: TestRecord = {
+      ...MOCK_RECORD,
+      id: 12,
+      serial_number: 'SN-ERR-003',
+      product_name: 'Error Board',
+      tester: 'tester-err',
+      fixture_id: 'fix-err',
+      operator_id: 'op-err',
+      board_id: 'SN-ERR-003',
+      result: 'fail',
+      test_errors: [{
+        error_type: 'analog',
+        location: 'resistor-R42',
+        subtest: null,
+        part_spec: '10K',
+        unit: 'OHM',
+        measured_raw: '5K',
+        nominal_raw: '10K',
+        high_limit_raw: '11K',
+        low_limit_raw: '9K',
+        threshold_raw: null,
+      }],
+    };
+
+    beforeEach(() => {
+      (global.fetch as jest.Mock).mockImplementation((url: string) => {
+        if ((url as string).includes('/api/products')) {
+          return Promise.resolve({ ok: true, json: async () => ({ products: [] }) });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ records: [RECORD_A, RECORD_B, RECORD_WITH_ERROR], demo: false }),
+        });
+      });
+    });
+
+    it('textFilter defaults to empty; setting it filters detail table rows immediately', async () => {
+      render(<HomePage />);
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(3 rows\)/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/);
+      fireEvent.change(input, { target: { value: 'ALPHA' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(1 rows?\)/)).toBeInTheDocument();
+      });
+    });
+
+    it('a row matching error location is included; no-match row is excluded', async () => {
+      render(<HomePage />);
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(3 rows\)/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/);
+      fireEvent.change(input, { target: { value: 'resistor-R42' } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(1 rows?\)/)).toBeInTheDocument();
+      });
+    });
+
+    it('textFilter and fixture filter apply together with AND logic', async () => {
+      render(<HomePage />);
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(3 rows\)/)).toBeInTheDocument();
+      });
+
+      // Typing 'ALPHA' already narrows to 1 row; also apply via URL by re-mounting with fixture
+      const input = screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/);
+
+      // Filter by text that matches both A and B: 'tester'
+      fireEvent.change(input, { target: { value: 'tester-alpha' } });
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(1 rows?\)/)).toBeInTheDocument();
+      });
+
+      // Now also change to text that matches neither → 0 rows
+      fireEvent.change(input, { target: { value: 'tester-alpha tester-beta' } });
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(0 rows\)/)).toBeInTheDocument();
+      });
+    });
+
+    it('clear button resets textFilter and all rows reappear', async () => {
+      render(<HomePage />);
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(3 rows\)/)).toBeInTheDocument();
+      });
+
+      const input = screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/);
+      fireEvent.change(input, { target: { value: 'ALPHA' } });
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(1 rows?\)/)).toBeInTheDocument();
+      });
+
+      const clearBtn = screen.getByRole('button', { name: 'Clear filter' });
+      fireEvent.click(clearBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Details for selected range \(3 rows\)/)).toBeInTheDocument();
+      });
+    });
+
+    it('?q=ALPHA URL param seeds textFilter to ALPHA on mount', async () => {
+      mockRouterQuery['q'] = 'ALPHA';
+
+      render(<HomePage />);
+
+      await waitFor(() => {
+        const input = screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/) as HTMLInputElement;
+        expect(input.value).toBe('ALPHA');
+      });
+
+      delete mockRouterQuery['q'];
+    });
+
+    it('debounce: rapid textFilter changes propagate to range summary only after 300ms', async () => {
+      jest.useFakeTimers();
+
+      render(<HomePage />);
+
+      // Flush the initial data load (uses real async in fake timer env)
+      await act(async () => {
+        jest.runAllTimers();
+      });
+
+      await waitFor(() => {
+        const items = screen.getAllByRole('listitem');
+        const totalItem = items.find((el) => /total tests:/i.test(el.textContent ?? ''));
+        expect(totalItem).toBeDefined();
+      });
+
+      const input = screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/);
+
+      // Rapid typing — table title changes immediately
+      act(() => { fireEvent.change(input, { target: { value: 'A' } }); });
+      act(() => { fireEvent.change(input, { target: { value: 'AL' } }); });
+      act(() => { fireEvent.change(input, { target: { value: 'ALPHA' } }); });
+
+      // Before 300ms: summary still shows original count (debounce hasn't fired)
+      const itemsBefore = screen.getAllByRole('listitem');
+      const totalBefore = itemsBefore.find((el) => /total tests:/i.test(el.textContent ?? ''));
+      expect(totalBefore?.textContent).toMatch(/3/);
+
+      // After 300ms: summary updates
+      act(() => { jest.advanceTimersByTime(300); });
+
+      await waitFor(() => {
+        const items = screen.getAllByRole('listitem');
+        const totalItem = items.find((el) => /total tests:/i.test(el.textContent ?? ''));
+        expect(totalItem?.textContent).toMatch(/1/);
+      });
+
+      jest.useRealTimers();
+    });
   });
 
   describe('error and timeout behaviour', () => {

@@ -13,6 +13,8 @@ type DetailTableProps = {
   activeFixture?: string;
   activeSn?: string;
   activeTester?: string;
+  textFilter?: string;
+  onTextFilterChange?: (value: string) => void;
 };
 
 const COLLAPSED_COUNT = 3;
@@ -94,6 +96,8 @@ export function DetailTable({
   activeFixture,
   activeSn,
   activeTester,
+  textFilter,
+  onTextFilterChange,
 }: DetailTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -116,7 +120,32 @@ export function DetailTable({
   return (
     <section className="section card">
       <div className="pagination" style={{ justifyContent: 'space-between', width: '100%' }}>
-        <h2>{title}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2>{title}</h2>
+          {onTextFilterChange && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="text"
+                value={textFilter ?? ''}
+                onChange={(e) => onTextFilterChange(e.target.value)}
+                placeholder="Search SN, product, tester, fixture, operator, errors..."
+                className="header-select"
+                aria-label="Filter table rows"
+                style={{ fontSize: '13px', minWidth: '280px' }}
+              />
+              {textFilter && (
+                <button
+                  type="button"
+                  onClick={() => onTextFilterChange('')}
+                  aria-label="Clear filter"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', color: '#6b7280' }}
+                >
+                  ✕
+                </button>
+              )}
+            </span>
+          )}
+        </div>
         <div className="pagination">
           <button type="button" onClick={() => onPageChange(Math.max(1, currentPage - 1))}>
             Prev

@@ -19,6 +19,7 @@
 | U5 | Error name text filter in error selection lists (header + range summary); shared `useErrorSearch` hook + `ErrorSearchInput` component |
 | U7 | Detail table errors column: foldable with readings sub-table (first 3 collapsed, "Show all (N)" expands inline table with measured/limits/unit) |
 | B2 | Query timeout / data refresh UX — stale data preserved on refresh failure; AbortController with 15s timeout; API batch raised 1000→5000 |
+| U6 | Detail table: free-text filter box next to table title; filters SN, product, tester, fixture, operator, errors; propagates to graph and range summary (debounced 300ms); ?q= URL seeding |
 
 ---
 
@@ -27,18 +28,6 @@
 ---
 
 ## ✨ UI / UX Improvements
-
-
-### U6 — Detail table: global filter text box
-**Problem:** No free-text search across the detail table. Filters currently require clicking specific fields (post-U3) or using header controls.
-
-**Required behavior:**
-- Add a filter text input next to the detail table title
-- Filters across: SN, product name, tester, fixture, operator, errors
-- Results propagate to: graph, range summary, and the detail table itself
-
-**Effort:** Medium-Large
-**Dependency:** Do after U3 + U4. U6 should be an extension of the shared filter state established there — not a parallel implementation. Doing U6 standalone risks duplicate/conflicting filter logic.
 
 ---
 
@@ -97,7 +86,7 @@
 1. ~~**I1** — Decide and implement filter state architecture (Option B recommended). All filter-related work depends on this.~~ ✅ Done
 2. ~~**U3 + U4** — Clickable filters + product filter header. Build on I1.~~ ✅ Done
 3. ~~**B2** — Query timeout / data refresh UX. Independent, but affects daily usability.~~ ✅ Done
-4. **U6** — Detail table text filter. Extends I1/U3/U4 filter state.
+4. ~~**U6** — Detail table text filter. Extends I1/U3/U4 filter state.~~ ✅ Done
 5. ~~**U5, U7** — Self-contained UI improvements, do in any order.~~ ✅ Done
 6. **F1** — AI chat. Highest payoff, all prerequisites in place by this point.
 7. **F2** — When a sample log file is available.
