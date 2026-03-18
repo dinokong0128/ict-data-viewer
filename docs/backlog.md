@@ -47,12 +47,6 @@
 
 ## 🚀 Features
 
-Two things are now ready for you:
-
-1. **`docs/ai-chat-design.md` has been created in your repo** with the full design document for F1.
-2. Below is the **updated F1 spec you should paste into `docs/backlog.md`**.
-
----
 ### F1 — AI-powered chat (ict-manager / ict-admin only)
 
 **Description:** Natural-language analytics for ICT data. Engineers can ask about top errors, fail trends, fail counts by tester/fixture/product, or serial-number history. The system returns a grounded answer and, when useful, a table or chart.
@@ -63,12 +57,13 @@ Two things are now ready for you:
 - LLM returns structured `ChatQueryPlan` JSON
 - Server validates the plan, compiles SQL, applies guardrails, runs a read-only query, then generates a grounded answer
 - UI shows answer first, with expandable debug details (SQL, row count, warnings)
+- Visualization hints in v1: `none`, `table`, `line`, `bar`
 
 **Guardrails:**
 - Never use `SUPABASE_SERVICE_KEY` for chat queries
 - Read-only access only
 - `SELECT` only, single statement only
-- Allowlisted query shapes / fields only
+- Allowlisted query shapes and fields only
 - Enforce row limits and timeout
 - If the question is ambiguous or data is insufficient, say so explicitly
 
@@ -80,11 +75,12 @@ Two things are now ready for you:
 - `src/lib/ai/chat-answer.ts`
 - `src/lib/ai/chat-provider.ts`
 
-**Dependencies:** `user_roles` gating, dedicated read-only DB role/path, provider API key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`)
+**Dependencies:** `user_roles` gating, dedicated read-only DB role/path, one concrete provider implementation, provider API key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY`)
 
-**Detailed design:** see project design doc / Google Doc for semantic layer, `ChatQueryPlan`, examples, and testing strategy.
+**Detailed design:** see project design doc / Google Doc for semantic layer, field mapping, `ChatQueryPlan`, examples, and testing strategy.
 
 **Implementation note:** Do not start with raw schema → arbitrary LLM SQL. First define the semantic layer and `ChatQueryPlan`, then build validation, SQL compilation, and grounded answering.
+
 ---
 
 ### F2 — Import additional products + extend parser
