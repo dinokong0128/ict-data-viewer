@@ -40,6 +40,17 @@ type SummaryFilter = 'pass' | 'fail' | 'boards' | null;
 /** Cap frontend queries at this duration; tune here if needed. */
 const QUERY_TIMEOUT_MS = 15_000;
 
+function matchesTextFilter(r: TestRecord, lower: string): boolean {
+  return (
+    r.serial_number.toLowerCase().includes(lower) ||
+    r.product_name.toLowerCase().includes(lower) ||
+    (r.tester ?? '').toLowerCase().includes(lower) ||
+    (r.fixture_id ?? '').toLowerCase().includes(lower) ||
+    (r.operator_id ?? '').toLowerCase().includes(lower) ||
+    r.test_errors.some((e) => e.location.toLowerCase().includes(lower))
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
   const { session, role, isGuest } = useAuth();
@@ -60,6 +71,8 @@ export default function HomePage() {
   const [fixture, setFixture] = useState('');
   const [sn, setSn] = useState('');
   const [tester, setTester] = useState('');
+  const [textFilter, setTextFilter] = useState('');
+  const [textFilterDebounced, setTextFilterDebounced] = useState('');
   const [productOptions, setProductOptions] = useState<string[]>([]);
 
   // Incremented on every loadData call; each call captures its own snapshot so
@@ -123,6 +136,11 @@ export default function HomePage() {
   }, [session]);
 
   useEffect(() => {
+    const timer = setTimeout(() => setTextFilterDebounced(textFilter), 300);
+    return () => clearTimeout(timer);
+  }, [textFilter]);
+
+  useEffect(() => {
     const rangeDays = Number(rangePreset);
     if (!Number.isNaN(rangeDays) && rangePreset !== 'custom') {
       const today = new Date();
@@ -147,6 +165,7 @@ export default function HomePage() {
     if (typeof q.fixture === 'string' && q.fixture) setFixture(q.fixture);
     if (typeof q.sn === 'string' && q.sn) setSn(q.sn);
     if (typeof q.tester === 'string' && q.tester) setTester(q.tester);
+    if (typeof q.q === 'string' && q.q) setTextFilter(q.q);
     const VALID_METRICS = ['boards', 'tester', 'fixture', 'operator', 'errors', 'utilization'];
     if (typeof q.metric === 'string' && VALID_METRICS.includes(q.metric)) setMetric(q.metric);
     if (typeof q.dateFrom === 'string' && q.dateFrom && typeof q.dateTo === 'string' && q.dateTo) {
@@ -199,32 +218,60 @@ export default function HomePage() {
     return rows;
   }, [rowsInRange, product, fixture, sn, tester]);
 
+  // Apply debounced textFilter on top of rowsFiltered — feeds graph and range summary.
+  const rowsFilteredTextDebounced = useMemo(() => {
+    if (!textFilterDebounced) return rowsFiltered;
+    const lower = textFilterDebounced.toLowerCase();
+    return rowsFiltered.filter((r) => matchesTextFilter(r, lower));
+  }, [rowsFiltered, textFilterDebounced]);
+
   const filteredRows = useMemo(() => {
-    if (!summaryFilter) return rowsFiltered;
-    if (summaryFilter === 'pass') return rowsFiltered.filter((r) => r.result === 'pass');
-    if (summaryFilter === 'fail') return rowsFiltered.filter((r) => r.result === 'fail');
+    if (!summaryFilter) return rowsFilteredTextDebounced;
+    if (summaryFilter === 'pass') return rowsFilteredTextDebounced.filter((r) => r.result === 'pass');
+    if (summaryFilter === 'fail') return rowsFilteredTextDebounced.filter((r) => r.result === 'fail');
     if (summaryFilter === 'boards') {
       const seen = new Set<string>();
-      return rowsFiltered.filter((r) => {
+      return rowsFilteredTextDebounced.filter((r) => {
         if (seen.has(r.serial_number)) return false;
         seen.add(r.serial_number);
         return true;
       });
     }
-    return rowsFiltered;
-  }, [rowsFiltered, summaryFilter]);
+    return rowsFilteredTextDebounced;
+  }, [rowsFilteredTextDebounced, summaryFilter]);
+
+  // Apply live (un-debounced) textFilter — feeds detail table for immediate keystroke response.
+  const tableFilteredRows = useMemo(() => {
+    let rows = rowsFiltered;
+    if (textFilter) {
+      const lower = textFilter.toLowerCase();
+      rows = rows.filter((r) => matchesTextFilter(r, lower));
+    }
+    if (!summaryFilter) return rows;
+    if (summaryFilter === 'pass') return rows.filter((r) => r.result === 'pass');
+    if (summaryFilter === 'fail') return rows.filter((r) => r.result === 'fail');
+    if (summaryFilter === 'boards') {
+      const seen = new Set<string>();
+      return rows.filter((r) => {
+        if (seen.has(r.serial_number)) return false;
+        seen.add(r.serial_number);
+        return true;
+      });
+    }
+    return rows;
+  }, [rowsFiltered, textFilter, summaryFilter]);
 
   const categoryOptions = useMemo(() => {
-    if (!rowsFiltered.length) return [];
+    if (!rowsFilteredTextDebounced.length) return [];
     const field = METRIC_FIELD[metric];
     if (!field) return [];
-    return getCategoryOptions(rowsFiltered, field);
-  }, [rowsFiltered, metric]);
+    return getCategoryOptions(rowsFilteredTextDebounced, field);
+  }, [rowsFilteredTextDebounced, metric]);
 
   const errorInfo = useMemo(() => {
-    if (!rowsFiltered.length) return { errors: [], counts: new Map<string, number>() };
-    return buildErrorCounts(rowsFiltered);
-  }, [rowsFiltered]);
+    if (!rowsFilteredTextDebounced.length) return { errors: [], counts: new Map<string, number>() };
+    return buildErrorCounts(rowsFilteredTextDebounced);
+  }, [rowsFilteredTextDebounced]);
 
   const errorTotals = useMemo(() => {
     const m = new Map<string, number>();
@@ -237,19 +284,19 @@ export default function HomePage() {
   }, [filteredRows]);
 
   const utilizationData = useMemo<UtilizationEntry[]>(() => {
-    if (!rowsFiltered.length) return [];
-    return buildUtilization(rowsFiltered);
-  }, [rowsFiltered]);
+    if (!rowsFilteredTextDebounced.length) return [];
+    return buildUtilization(rowsFilteredTextDebounced);
+  }, [rowsFilteredTextDebounced]);
 
-  // Summary stats based on rowsFiltered so product/fixture/sn/tester filters propagate here.
+  // Summary stats based on rowsFilteredTextDebounced so all active filters (including textFilter) propagate here.
   const summaryStats = useMemo(() => {
-    if (!rowsFiltered.length) return null;
-    const uniqueBoards = new Set(rowsFiltered.map((r) => r.serial_number));
-    const passCount = rowsFiltered.filter((r) => r.result === 'pass').length;
-    const failCount = rowsFiltered.filter((r) => r.result === 'fail').length;
+    if (!rowsFilteredTextDebounced.length) return null;
+    const uniqueBoards = new Set(rowsFilteredTextDebounced.map((r) => r.serial_number));
+    const passCount = rowsFilteredTextDebounced.filter((r) => r.result === 'pass').length;
+    const failCount = rowsFilteredTextDebounced.filter((r) => r.result === 'fail').length;
 
     const errorCounts: Record<string, number> = {};
-    rowsFiltered.forEach((r) => {
+    rowsFilteredTextDebounced.forEach((r) => {
       r.test_errors.forEach((e) => {
         errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
       });
@@ -257,8 +304,8 @@ export default function HomePage() {
     const allErrorsSorted = Object.entries(errorCounts)
       .sort((a, b) => b[1] - a[1]) as Array<[string, number]>;
 
-    return { totalTests: rowsFiltered.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, allErrorsSorted };
-  }, [rowsFiltered]);
+    return { totalTests: rowsFilteredTextDebounced.length, uniqueBoardCount: uniqueBoards.size, passCount, failCount, allErrorsSorted };
+  }, [rowsFilteredTextDebounced]);
 
   const summaryErrorNames = useMemo(
     () => (summaryStats ? summaryStats.allErrorsSorted.map(([loc]) => loc) : []),
@@ -341,9 +388,9 @@ export default function HomePage() {
   }, [filteredRows, metric, selectedErrors, errorInfo, categoryOptions, categorySelection, utilizationData]);
 
   const tableRows = useMemo(() => {
-    if (!filteredRows.length) return [] as TestRecord[];
+    if (!tableFilteredRows.length) return [] as TestRecord[];
 
-    let rows = filteredRows;
+    let rows = tableFilteredRows;
     if (metric === 'errors' && selectedErrors.size > 0) {
       rows = rows.filter((r) =>
         r.test_errors.some((e) => selectedErrors.has(e.location))
@@ -355,7 +402,7 @@ export default function HomePage() {
       return rows.filter((r) => r.tester === selectedDate);
     }
     return rows.filter((r) => getDateKey(r) === selectedDate);
-  }, [filteredRows, selectedDate, metric, selectedErrors]);
+  }, [tableFilteredRows, selectedDate, metric, selectedErrors]);
 
   const tableTitle = selectedDate
     ? metric === 'utilization'
@@ -608,6 +655,8 @@ export default function HomePage() {
         activeFixture={fixture}
         activeSn={sn}
         activeTester={tester}
+        textFilter={textFilter}
+        onTextFilterChange={(v) => { setTextFilter(v); setPage(1); }}
       />
 
       <footer>

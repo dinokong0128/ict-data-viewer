@@ -174,6 +174,65 @@ describe('DetailTable', () => {
     expect(screen.getByRole('cell', { name: 'e05' })).toBeInTheDocument();
   });
 
+  describe('U6 — text filter input', () => {
+    it('renders text filter input when onTextFilterChange is provided', () => {
+      render(
+        <DetailTable
+          rows={rows}
+          page={1}
+          pageSize={10}
+          onPageChange={jest.fn()}
+          title="Test"
+          textFilter=""
+          onTextFilterChange={jest.fn()}
+        />
+      );
+      expect(screen.getByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/)).toBeInTheDocument();
+    });
+
+    it('does not render text filter input when onTextFilterChange is not provided', () => {
+      render(
+        <DetailTable rows={rows} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
+      );
+      expect(screen.queryByPlaceholderText(/Search SN, product, tester, fixture, operator, errors/)).not.toBeInTheDocument();
+    });
+
+    it('clear button appears when textFilter is non-empty and calls onTextFilterChange with empty string', () => {
+      const onTextFilterChange = jest.fn();
+      render(
+        <DetailTable
+          rows={rows}
+          page={1}
+          pageSize={10}
+          onPageChange={jest.fn()}
+          title="Test"
+          textFilter="ABC"
+          onTextFilterChange={onTextFilterChange}
+        />
+      );
+
+      const clearBtn = screen.getByRole('button', { name: 'Clear filter' });
+      expect(clearBtn).toBeInTheDocument();
+      fireEvent.click(clearBtn);
+      expect(onTextFilterChange).toHaveBeenCalledWith('');
+    });
+
+    it('clear button is absent when textFilter is empty', () => {
+      render(
+        <DetailTable
+          rows={rows}
+          page={1}
+          pageSize={10}
+          onPageChange={jest.fn()}
+          title="Test"
+          textFilter=""
+          onTextFilterChange={jest.fn()}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Clear filter' })).not.toBeInTheDocument();
+    });
+  });
+
   it('U7: rows with 3 or fewer errors show all with no toggle', () => {
     const makeError = (loc: string) => ({
       error_type: 'analog',
