@@ -36,8 +36,15 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
 
   while (true) {
     const { data, error } = await sb
-      .from('tests_with_errors')
-      .select('*')
+      .from('tests')
+      .select(`
+        id, board_id, start_time, end_time, result,
+        operator_id, fixture_id, tester, source_file, ingested_at,
+        boards!inner(serial_number, mac_address, rev, product_id,
+          products!inner(product_name, part_number)
+        ),
+        test_errors(location)
+      `)
       .gte('start_time', start)
       .lte('start_time', end + 'T23:59:59Z')
       .order('start_time', { ascending: false })
@@ -52,25 +59,29 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
     from += BATCH;
   }
 
-  return allRows.map((row: any): TestRecord => ({
-    id:             row.id,
-    board_id:       row.board_id,
-    start_time:     row.start_time,
-    end_time:       row.end_time,
-    result:         row.result,
-    operator_id:    row.operator_id  ?? '',
-    fixture_id:     row.fixture_id   ?? '',
-    tester:         row.tester       ?? '',
-    source_file:    row.source_file  ?? '',
-    ingested_at:    row.ingested_at  ?? '',
-    serial_number:  row.serial_number ?? row.board_id,
-    mac_address:    row.mac_address  ?? '',
-    rev:            row.rev          ?? '',
-    product_id:     row.product_id   ?? '',
-    product_name:   row.product_name ?? '',
-    part_number:    row.part_number  ?? '',
-    error_locations: row.error_locations ?? [],
-  }));
+  return allRows.map((row: any): TestRecord => {
+    const board = row.boards;
+    const product = board?.products;
+    return {
+      id:             row.id,
+      board_id:       row.board_id,
+      start_time:     row.start_time,
+      end_time:       row.end_time,
+      result:         row.result,
+      operator_id:    row.operator_id  ?? '',
+      fixture_id:     row.fixture_id   ?? '',
+      tester:         row.tester       ?? '',
+      source_file:    row.source_file  ?? '',
+      ingested_at:    row.ingested_at  ?? '',
+      serial_number:  board?.serial_number ?? row.board_id,
+      mac_address:    board?.mac_address  ?? '',
+      rev:            board?.rev          ?? '',
+      product_id:     board?.product_id   ?? '',
+      product_name:   product?.product_name ?? '',
+      part_number:    product?.part_number  ?? '',
+      error_locations: (row.test_errors ?? []).map((e: any) => e.location),
+    };
+  });
 }
 
 // ---------------------------------------------------------------------------
