@@ -26,10 +26,10 @@ SELECT
     ARRAY[]::text[]
   ) AS error_locations
 FROM tests t
-JOIN boards b ON b.serial_number = t.board_id
-JOIN products p ON p.part_number = b.product_id
+JOIN boards b ON b.id = t.board_id
+JOIN products p ON p.id = b.product_id
 LEFT JOIN test_errors te ON te.test_id = t.id
 GROUP BY
   t.id,
-  b.serial_number, b.mac_address, b.rev, b.product_id,
-  p.product_name, p.part_number;
+  b.id,
+  p.id;
