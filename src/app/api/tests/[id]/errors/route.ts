@@ -35,9 +35,10 @@ function loadFixture(): FixtureData {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
-  const testId = Number(params.id);
+  const { id } = await params;
+  const testId = Number(id);
   if (Number.isNaN(testId)) {
     return NextResponse.json({ error: 'Invalid test ID' }, { status: 400 });
   }
