@@ -47,7 +47,7 @@ function matchesTextFilter(r: TestRecord, lower: string): boolean {
     (r.tester ?? '').toLowerCase().includes(lower) ||
     (r.fixture_id ?? '').toLowerCase().includes(lower) ||
     (r.operator_id ?? '').toLowerCase().includes(lower) ||
-    r.test_errors.some((e) => e.location.toLowerCase().includes(lower))
+    r.error_locations.some((loc) => loc.toLowerCase().includes(lower))
   );
 }
 
@@ -276,8 +276,8 @@ export default function HomePage() {
   const errorTotals = useMemo(() => {
     const m = new Map<string, number>();
     filteredRows.forEach((r) => {
-      r.test_errors.forEach((e) => {
-        m.set(e.location, (m.get(e.location) ?? 0) + 1);
+      r.error_locations.forEach((loc) => {
+        m.set(loc, (m.get(loc) ?? 0) + 1);
       });
     });
     return m;
@@ -297,8 +297,8 @@ export default function HomePage() {
 
     const errorCounts: Record<string, number> = {};
     rowsFilteredTextDebounced.forEach((r) => {
-      r.test_errors.forEach((e) => {
-        errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
+      r.error_locations.forEach((loc) => {
+        errorCounts[loc] = (errorCounts[loc] ?? 0) + 1;
       });
     });
     const allErrorsSorted = Object.entries(errorCounts)
@@ -393,7 +393,7 @@ export default function HomePage() {
     let rows = tableFilteredRows;
     if (metric === 'errors' && selectedErrors.size > 0) {
       rows = rows.filter((r) =>
-        r.test_errors.some((e) => selectedErrors.has(e.location))
+        r.error_locations.some((loc) => selectedErrors.has(loc))
       );
     }
 
@@ -657,6 +657,7 @@ export default function HomePage() {
         activeTester={tester}
         textFilter={textFilter}
         onTextFilterChange={(v) => { setTextFilter(v); setPage(1); }}
+        authToken={session?.access_token}
       />
 
       <footer>

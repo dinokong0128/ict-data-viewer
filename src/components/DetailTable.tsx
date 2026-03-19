@@ -15,6 +15,7 @@ type DetailTableProps = {
   activeTester?: string;
   textFilter?: string;
   onTextFilterChange?: (value: string) => void;
+  authToken?: string;
 };
 
 const COLLAPSED_COUNT = 3;
@@ -23,26 +24,72 @@ function dash(value: string | null | undefined): string {
   return value == null || value === '' ? '—' : value;
 }
 
-function ErrorsCell({ errors, expanded, onToggle }: { errors: TestErrorRecord[]; expanded: boolean; onToggle: () => void }) {
-  if (errors.length === 0) return <span>—</span>;
+function ErrorsCell({
+  locations,
+  testId,
+  expanded,
+  onToggle,
+  authToken,
+}: {
+  locations: string[];
+  testId: number;
+  expanded: boolean;
+  onToggle: () => void;
+  authToken?: string;
+}) {
+  const [errors, setErrors] = useState<TestErrorRecord[] | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  if (errors.length <= COLLAPSED_COUNT) {
-    return <span>{errors.map((e) => e.location).join(', ')}</span>;
+  if (locations.length === 0) return <span>—</span>;
+
+  if (locations.length <= COLLAPSED_COUNT) {
+    return <span>{locations.join(', ')}</span>;
   }
 
   if (!expanded) {
     return (
       <div>
-        <span>{errors.slice(0, COLLAPSED_COUNT).map((e) => e.location).join(', ')}</span>
+        <span>{locations.slice(0, COLLAPSED_COUNT).join(', ')}</span>
         <div>
           <button
             type="button"
             onClick={onToggle}
             style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
           >
-            Show all ({errors.length})
+            Show all ({locations.length})
           </button>
         </div>
+      </div>
+    );
+  }
+
+  // Expanded — fetch full error details if not yet loaded
+  if (errors === null && !loading) {
+    setLoading(true);
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+    fetch(`/api/tests/${testId}/errors`, { headers })
+      .then((res) => res.json())
+      .then((body: { errors: TestErrorRecord[] }) => {
+        setErrors(body.errors ?? []);
+      })
+      .catch(() => {
+        setErrors([]);
+      })
+      .finally(() => setLoading(false));
+  }
+
+  if (loading || errors === null) {
+    return (
+      <div>
+        <span style={{ fontSize: '12px', color: '#6b7280' }}>Loading errors…</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
+        >
+          Show less
+        </button>
       </div>
     );
   }
@@ -98,6 +145,7 @@ export function DetailTable({
   activeTester,
   textFilter,
   onTextFilterChange,
+  authToken,
 }: DetailTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -245,9 +293,11 @@ export function DetailTable({
                 <td>{row.operator_id}</td>
                 <td>
                   <ErrorsCell
-                    errors={row.test_errors}
+                    locations={row.error_locations}
+                    testId={row.id}
                     expanded={expandedRows.has(row.id)}
                     onToggle={() => toggleRow(row.id)}
+                    authToken={authToken}
                   />
                 </td>
               </tr>

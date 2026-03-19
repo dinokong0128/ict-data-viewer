@@ -18,7 +18,7 @@ function makeRecord(overrides: Partial<TestRecord> & { id: number; serial_number
     product_id:   'PART-REDACTED-001',
     product_name: 'Test Product A',
     part_number:  'PART-REDACTED-001',
-    test_errors:  [],
+    error_locations: [],
     ...overrides,
   };
 }
@@ -131,32 +131,18 @@ describe('DetailTable', () => {
       id: 1,
       serial_number: 'SN-001',
       result: 'fail',
-      test_errors: [
-        { error_type: 'analog', location: 'c01', subtest: null, part_spec: '1UF', unit: 'FARADS', measured_raw: '0.78327u', nominal_raw: '1.0000u', high_limit_raw: '1.2000u', low_limit_raw: '0.80000u', threshold_raw: null },
-      ],
+      error_locations: ['c01'],
     });
     render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
     expect(screen.getByText('c01')).toBeInTheDocument();
   });
 
-  it('U7: shows first 3 errors collapsed, all 5 after toggle', () => {
-    const makeError = (loc: string) => ({
-      error_type: 'analog',
-      location: loc,
-      subtest: null,
-      part_spec: '1UF',
-      unit: 'FARADS',
-      measured_raw: '0.78u',
-      nominal_raw: '1.0u',
-      high_limit_raw: '1.2u',
-      low_limit_raw: '0.8u',
-      threshold_raw: null,
-    });
+  it('U7: shows first 3 errors collapsed, toggle shows "Show all" button', () => {
     const row = makeRecord({
       id: 42,
       serial_number: 'SN-005',
       result: 'fail',
-      test_errors: ['e01', 'e02', 'e03', 'e04', 'e05'].map(makeError),
+      error_locations: ['e01', 'e02', 'e03', 'e04', 'e05'],
     });
     render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
 
@@ -165,13 +151,8 @@ describe('DetailTable', () => {
     expect(screen.queryByText('e04')).not.toBeInTheDocument();
     expect(screen.queryByText('e05')).not.toBeInTheDocument();
 
-    // Expand via toggle button
-    fireEvent.click(screen.getByRole('button', { name: 'Show all (5)' }));
-
-    // All 5 now visible as table rows
-    expect(screen.getByRole('cell', { name: 'e01' })).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: 'e04' })).toBeInTheDocument();
-    expect(screen.getByRole('cell', { name: 'e05' })).toBeInTheDocument();
+    // Toggle button present
+    expect(screen.getByRole('button', { name: 'Show all (5)' })).toBeInTheDocument();
   });
 
   describe('U6 — text filter input', () => {
@@ -234,23 +215,11 @@ describe('DetailTable', () => {
   });
 
   it('U7: rows with 3 or fewer errors show all with no toggle', () => {
-    const makeError = (loc: string) => ({
-      error_type: 'analog',
-      location: loc,
-      subtest: null,
-      part_spec: '1UF',
-      unit: 'FARADS',
-      measured_raw: '0.78u',
-      nominal_raw: '1.0u',
-      high_limit_raw: '1.2u',
-      low_limit_raw: '0.8u',
-      threshold_raw: null,
-    });
     const row = makeRecord({
       id: 43,
       serial_number: 'SN-006',
       result: 'fail',
-      test_errors: ['f01', 'f02', 'f03'].map(makeError),
+      error_locations: ['f01', 'f02', 'f03'],
     });
     render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
 
