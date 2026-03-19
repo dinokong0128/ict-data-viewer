@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DetailTable } from '@/components/DetailTable';
 import type { TestRecord } from '@/lib/testUtils';
 
@@ -225,5 +225,119 @@ describe('DetailTable', () => {
 
     expect(screen.getByText('f01, f02, f03')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+  });
+
+  describe('lazy-loaded error details on expand', () => {
+    beforeEach(() => {
+      global.fetch = jest.fn() as jest.Mock;
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('fetches and renders full error details when row is expanded', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          errors: [
+            { error_type: 'analog', location: 'e01', subtest: null, part_spec: '1UF', unit: 'FARADS', measured_raw: '0.78u', nominal_raw: '1.0u', high_limit_raw: '1.2u', low_limit_raw: '0.8u', threshold_raw: null },
+            { error_type: 'analog', location: 'e02', subtest: null, part_spec: '10K', unit: 'OHM', measured_raw: '5K', nominal_raw: '10K', high_limit_raw: '11K', low_limit_raw: '9K', threshold_raw: null },
+            { error_type: 'analog', location: 'e03', subtest: null, part_spec: '22UF', unit: 'FARADS', measured_raw: '20u', nominal_raw: '22u', high_limit_raw: '24u', low_limit_raw: '20u', threshold_raw: null },
+            { error_type: 'digital', location: 'e04', subtest: null, part_spec: 'IC', unit: '', measured_raw: 'FAIL', nominal_raw: '', high_limit_raw: '', low_limit_raw: '', threshold_raw: null },
+            { error_type: 'analog', location: 'e05', subtest: null, part_spec: '4.7K', unit: 'OHM', measured_raw: '3K', nominal_raw: '4.7K', high_limit_raw: '5.2K', low_limit_raw: '4.2K', threshold_raw: null },
+          ],
+        }),
+      });
+
+      const row = makeRecord({
+        id: 42,
+        serial_number: 'SN-005',
+        result: 'fail',
+        error_locations: ['e01', 'e02', 'e03', 'e04', 'e05'],
+      });
+      render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
+
+      // Click "Show all" to expand
+      fireEvent.click(screen.getByRole('button', { name: 'Show all (5)' }));
+
+      // Verify fetch was called with correct URL
+      expect(global.fetch).toHaveBeenCalledWith('/api/tests/42/errors', expect.any(Object));
+
+      // Wait for details to render
+      await waitFor(() => {
+        expect(screen.getByRole('cell', { name: 'e01' })).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'e04' })).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'e05' })).toBeInTheDocument();
+      });
+
+      // Verify measurement data rendered (use getAllBy for values appearing in multiple rows)
+      expect(screen.getByRole('cell', { name: '0.78u' })).toBeInTheDocument();
+      expect(screen.getAllByRole('cell', { name: 'FARADS' }).length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('passes Authorization header when authToken is provided', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ errors: [] }),
+      });
+
+      const row = makeRecord({
+        id: 10,
+        serial_number: 'SN-AUTH',
+        result: 'fail',
+        error_locations: ['a01', 'a02', 'a03', 'a04'],
+      });
+      render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" authToken="my-jwt" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show all (4)' }));
+
+      await waitFor(() => {
+        const [, options] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
+        expect((options.headers as Record<string, string>)['Authorization']).toBe('Bearer my-jwt');
+      });
+    });
+
+    it('shows error message when fetch returns non-ok response', async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'DB unavailable' }),
+      });
+
+      const row = makeRecord({
+        id: 99,
+        serial_number: 'SN-ERR',
+        result: 'fail',
+        error_locations: ['x01', 'x02', 'x03', 'x04'],
+      });
+      render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show all (4)' }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Error loading details/)).toBeInTheDocument();
+        expect(screen.getByText(/HTTP 500/)).toBeInTheDocument();
+      });
+    });
+
+    it('shows error message when fetch rejects (network error)', async () => {
+      (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network failure'));
+
+      const row = makeRecord({
+        id: 88,
+        serial_number: 'SN-NET',
+        result: 'fail',
+        error_locations: ['n01', 'n02', 'n03', 'n04'],
+      });
+      render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show all (4)' }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Error loading details/)).toBeInTheDocument();
+        expect(screen.getByText(/Network failure/)).toBeInTheDocument();
+      });
+    });
   });
 });

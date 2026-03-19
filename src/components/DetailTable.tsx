@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { TestErrorRecord, TestRecord } from '@/lib/testUtils';
 
 type DetailTableProps = {
@@ -39,6 +39,36 @@ function ErrorsCell({
 }) {
   const [errors, setErrors] = useState<TestErrorRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const hasFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (!expanded || hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
+    let cancelled = false;
+    setLoading(true);
+    setFetchError(null);
+
+    const headers: Record<string, string> = {};
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+    fetch(`/api/tests/${testId}/errors`, { headers })
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((body: { errors: TestErrorRecord[] }) => {
+        if (!cancelled) setErrors(body.errors ?? []);
+      })
+      .catch((err) => {
+        if (!cancelled) setFetchError(err instanceof Error ? err.message : 'Failed to load errors');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [expanded, testId, authToken]);
 
   if (locations.length === 0) return <span>—</span>;
 
@@ -63,20 +93,19 @@ function ErrorsCell({
     );
   }
 
-  // Expanded — fetch full error details if not yet loaded
-  if (errors === null && !loading) {
-    setLoading(true);
-    const headers: Record<string, string> = {};
-    if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-    fetch(`/api/tests/${testId}/errors`, { headers })
-      .then((res) => res.json())
-      .then((body: { errors: TestErrorRecord[] }) => {
-        setErrors(body.errors ?? []);
-      })
-      .catch(() => {
-        setErrors([]);
-      })
-      .finally(() => setLoading(false));
+  if (fetchError) {
+    return (
+      <div>
+        <span style={{ fontSize: '12px', color: '#ef4444' }}>Error loading details: {fetchError}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
+        >
+          Show less
+        </button>
+      </div>
+    );
   }
 
   if (loading || errors === null) {
