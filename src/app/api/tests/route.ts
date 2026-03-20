@@ -30,58 +30,32 @@ function getSupabaseForUser(authHeader: string): SupabaseClient {
 }
 
 async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string): Promise<TestRecord[]> {
-  const BATCH = 5000;
-  const allRows: any[] = [];
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await sb
-      .from('tests')
-      .select(`
-        id, board_id, start_time, end_time, result,
-        operator_id, fixture_id, tester, source_file, ingested_at,
-        boards!inner(serial_number, mac_address, rev, product_id,
-          products!inner(product_name, part_number)
-        ),
-        test_errors(location)
-      `)
-      .gte('start_time', start)
-      .lte('start_time', end + 'T23:59:59Z')
-      .order('start_time', { ascending: false })
-      .order('id', { ascending: false })
-      .range(from, from + BATCH - 1);
-
-    if (error) throw new Error(`Supabase query failed: ${error.message}`);
-    if (!data || data.length === 0) break;
-
-    allRows.push(...data);
-    if (data.length < BATCH) break;
-    from += BATCH;
-  }
-
-  return allRows.map((row: any): TestRecord => {
-    const board = row.boards;
-    const product = board?.products;
-    return {
-      id:             row.id,
-      board_id:       row.board_id,
-      start_time:     row.start_time,
-      end_time:       row.end_time,
-      result:         row.result,
-      operator_id:    row.operator_id  ?? '',
-      fixture_id:     row.fixture_id   ?? '',
-      tester:         row.tester       ?? '',
-      source_file:    row.source_file  ?? '',
-      ingested_at:    row.ingested_at  ?? '',
-      serial_number:  board?.serial_number ?? row.board_id,
-      mac_address:    board?.mac_address  ?? '',
-      rev:            board?.rev          ?? '',
-      product_id:     board?.product_id   ?? '',
-      product_name:   product?.product_name ?? '',
-      part_number:    product?.part_number  ?? '',
-      error_locations: (row.test_errors ?? []).map((e: any) => e.location),
-    };
+  const { data, error } = await sb.rpc('get_tests_in_range', {
+    p_start: start,
+    p_end:   end + 'T23:59:59Z',
   });
+
+  if (error) throw new Error(`Supabase query failed: ${error.message}`);
+
+  return (data ?? []).map((row: any): TestRecord => ({
+    id:             row.id,
+    board_id:       row.board_id,
+    start_time:     row.start_time,
+    end_time:       row.end_time,
+    result:         row.result,
+    operator_id:    row.operator_id  ?? '',
+    fixture_id:     row.fixture_id   ?? '',
+    tester:         row.tester       ?? '',
+    source_file:    row.source_file  ?? '',
+    ingested_at:    row.ingested_at  ?? '',
+    serial_number:  row.serial_number ?? row.board_id,
+    mac_address:    row.mac_address  ?? '',
+    rev:            row.rev          ?? '',
+    product_id:     row.product_id   ?? '',
+    product_name:   row.product_name ?? '',
+    part_number:    row.part_number  ?? '',
+    error_locations: row.error_locations ?? [],
+  }));
 }
 
 // ---------------------------------------------------------------------------
