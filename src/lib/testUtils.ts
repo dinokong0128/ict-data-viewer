@@ -38,8 +38,8 @@ export type TestRecord = {
   // from products join:
   product_name: string;
   part_number: string;
-  // from test_errors join:
-  test_errors: TestErrorRecord[];
+  // aggregated from test_errors (location strings only):
+  error_locations: string[];
 };
 
 export type UtilizationEntry = {
@@ -83,8 +83,8 @@ export function buildSummary(records: TestRecord[]): string[] {
 
   const errorCounts: Record<string, number> = {};
   records.forEach((r) => {
-    r.test_errors.forEach((e) => {
-      errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
+    r.error_locations.forEach((loc) => {
+      errorCounts[loc] = (errorCounts[loc] ?? 0) + 1;
     });
   });
   const topErrors = Object.entries(errorCounts)
@@ -107,9 +107,9 @@ export function buildErrorCounts(records: TestRecord[]): {
   const allErrors = new Set<string>();
   const counts = new Map<string, number>();
   records.forEach((r) => {
-    r.test_errors.forEach((e) => {
-      allErrors.add(e.location);
-      const key = `${getDateKey(r)}::${e.location}`;
+    r.error_locations.forEach((loc) => {
+      allErrors.add(loc);
+      const key = `${getDateKey(r)}::${loc}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
   });
