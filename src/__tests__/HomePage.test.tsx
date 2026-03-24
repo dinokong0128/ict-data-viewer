@@ -79,6 +79,7 @@ const MOCK_RECORD: TestRecord = {
   product_id: 'PART-REDACTED-001',
   product_name: 'Test Product A',
   part_number: 'PART-REDACTED-001',
+  error_locations: [],
   test_errors: [],
 };
 
@@ -241,6 +242,7 @@ describe('HomePage', () => {
       fixture_id: 'fix-alpha',
       operator_id: 'op-alpha',
       board_id: 'SN-ALPHA-001',
+      error_locations: [],
       test_errors: [],
     };
     const RECORD_B: TestRecord = {
@@ -252,6 +254,7 @@ describe('HomePage', () => {
       fixture_id: 'fix-beta',
       operator_id: 'op-beta',
       board_id: 'SN-BETA-002',
+      error_locations: [],
       test_errors: [],
     };
     const RECORD_WITH_ERROR: TestRecord = {
@@ -264,18 +267,8 @@ describe('HomePage', () => {
       operator_id: 'op-err',
       board_id: 'SN-ERR-003',
       result: 'fail',
-      test_errors: [{
-        error_type: 'analog',
-        location: 'resistor-R42',
-        subtest: null,
-        part_spec: '10K',
-        unit: 'OHM',
-        measured_raw: '5K',
-        nominal_raw: '10K',
-        high_limit_raw: '11K',
-        low_limit_raw: '9K',
-        threshold_raw: null,
-      }],
+      error_locations: ['resistor-R42'],
+      test_errors: [],
     };
 
     beforeEach(() => {

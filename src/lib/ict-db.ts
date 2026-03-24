@@ -70,6 +70,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
   const boardId = boardData!.id as string;
 
   // 3. tests — upsert with ignoreDuplicates so we can detect new vs existing
+  const locations = parsed.errors.map((e) => e.location);
   const { data: testData, error: testErr } = await sb
     .from('tests')
     .upsert(
@@ -82,6 +83,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
         fixture_id:  parsed.fixture_id,
         tester:      parsed.tester,
         source_file: parsed.source_file,
+        error_locations: locations,
       },
       { onConflict: 'board_id,start_time,end_time', ignoreDuplicates: true }
     )

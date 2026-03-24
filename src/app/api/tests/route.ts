@@ -41,10 +41,9 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
     const { data, error } = await sb
       .from('tests')
       .select(`
-        id, board_id, start_time, end_time, result, operator_id, fixture_id, tester, source_file, ingested_at,
+        id, board_id, start_time, end_time, result, operator_id, fixture_id, tester, source_file, ingested_at, error_locations,
         boards!inner (serial_number, mac_address, rev, product_id,
-          products!inner (product_name, part_number)),
-        test_errors (error_type, location, subtest, part_spec, unit, measured_raw, nominal_raw, high_limit_raw, low_limit_raw, threshold_raw)
+          products!inner (product_name, part_number))
       `)
       .gte('start_time', start)
       .lte('start_time', end + 'T23:59:59Z')
@@ -77,7 +76,8 @@ async function fetchFromSupabase(sb: SupabaseClient, start: string, end: string)
     product_id:   row.boards?.product_id     ?? '',
     product_name: row.boards?.products?.product_name ?? '',
     part_number:  row.boards?.products?.part_number  ?? '',
-    test_errors:  (row.test_errors ?? []) as TestErrorRecord[],
+    error_locations: (row.error_locations ?? []) as string[],
+    test_errors:  [],
   }));
 }
 
@@ -172,7 +172,8 @@ function fetchFromFixture(start: string, end: string): TestRecord[] {
       product_id:   board?.product_id     ?? '',
       product_name: product?.product_name ?? '',
       part_number:  product?.part_number  ?? '',
-      test_errors:  errorsByTestId.get(test.id) ?? [],
+      error_locations: (errorsByTestId.get(test.id) ?? []).map((e) => e.location),
+      test_errors:  [],
     });
   }
 
