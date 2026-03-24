@@ -41,23 +41,23 @@ function ErrorsCell({
 
   const locations = errors.length > 0 ? errors.map((e) => e.location) : errorLocations;
 
-  if (locations.length <= COLLAPSED_COUNT) {
-    return <span>{locations.join(', ')}</span>;
-  }
-
   if (!expanded) {
+    const display = locations.length <= COLLAPSED_COUNT
+      ? locations.join(', ')
+      : locations.slice(0, COLLAPSED_COUNT).join(', ');
     return (
-      <div>
-        <span>{locations.slice(0, COLLAPSED_COUNT).join(', ')}</span>
-        <div>
-          <button
-            type="button"
-            onClick={onToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
-          >
-            Show all ({locations.length})
-          </button>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span>{display}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Expand errors"
+          title="Show error details"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#4338ca', padding: '0 2px', lineHeight: 1 }}
+        >
+          {locations.length > COLLAPSED_COUNT ? `+${locations.length - COLLAPSED_COUNT}` : ''}
+          <span style={{ fontSize: '12px', verticalAlign: 'middle' }}> ▶</span>
+        </button>
       </div>
     );
   }

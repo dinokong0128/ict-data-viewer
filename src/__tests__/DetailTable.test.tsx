@@ -176,7 +176,7 @@ describe('DetailTable', () => {
     expect(screen.queryByText('e05')).not.toBeInTheDocument();
 
     // Expand via toggle button — triggers fetch
-    fireEvent.click(screen.getByRole('button', { name: 'Show all (5)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand errors' }));
 
     // After fetch resolves, all 5 now visible as table rows
     await waitFor(() => {
@@ -245,7 +245,7 @@ describe('DetailTable', () => {
     });
   });
 
-  it('U7: rows with 3 or fewer errors show all with no toggle', () => {
+  it('U7: rows with 3 or fewer errors show all locations and have expand icon', () => {
     const row = makeRecord({
       id: 43,
       serial_number: 'SN-006',
@@ -256,6 +256,6 @@ describe('DetailTable', () => {
     render(<DetailTable rows={[row]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />);
 
     expect(screen.getByText('f01, f02, f03')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand errors' })).toBeInTheDocument();
   });
 });
