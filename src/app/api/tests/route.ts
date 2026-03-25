@@ -61,6 +61,7 @@ function applyFilters(query: any, start: string, end: string, filters: TestsFilt
     .gte('start_time', start)
     .lte('start_time', end + 'T23:59:59Z');
 
+  if (filters.product) q = q.eq('boards.products.product_name', filters.product);
   if (filters.fixture) q = q.eq('fixture_id', filters.fixture);
   if (filters.tester)  q = q.eq('tester', filters.tester);
   if (filters.sn)      q = q.eq('board_id', filters.sn);
@@ -70,7 +71,7 @@ function applyFilters(query: any, start: string, end: string, filters: TestsFilt
     const escaped = filters.q.replace(/[%_]/g, '\\$&');
     q = q.or(
       [
-        `serial_number.ilike.%${escaped}%`,
+        `board_id.ilike.%${escaped}%`,
         `tester.ilike.%${escaped}%`,
         `fixture_id.ilike.%${escaped}%`,
         `operator_id.ilike.%${escaped}%`,

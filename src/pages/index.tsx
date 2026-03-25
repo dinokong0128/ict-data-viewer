@@ -495,7 +495,11 @@ export default function HomePage() {
   function handleReload() {
     if (!startDate || !endDate) return;
     void loadSummary(startDate, endDate, { product, fixture, sn, tester });
-    void loadPage(startDate, endDate, buildPageFilters(), page);
+    // Mirror the table effect logic: narrow range when a chart slice is selected
+    const effectiveStart = selectedDate && metric !== 'utilization' ? selectedDate : startDate;
+    const effectiveEnd   = selectedDate && metric !== 'utilization' ? selectedDate : endDate;
+    const testerOverride = metric === 'utilization' && selectedDate ? selectedDate : undefined;
+    void loadPage(effectiveStart, effectiveEnd, buildPageFilters({ tester: testerOverride ?? tester }), page);
   }
 
   return (

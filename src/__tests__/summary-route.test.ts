@@ -19,15 +19,25 @@ const mockMvLte = jest.fn();
 const mockMvGte = jest.fn().mockReturnValue({ lte: mockMvLte });
 const mockMvSelect = jest.fn().mockReturnValue({ gte: mockMvGte });
 
+// Mock for auth.getUser() on the anon-key client (JWT validation)
+const mockGetUser = jest.fn();
+
 jest.mock('@supabase/supabase-js', () => ({
-  createClient: jest.fn(() => ({
-    from: jest.fn().mockImplementation((table: string) => {
-      if (table === 'mv_error_counts_by_day') {
-        return { select: mockMvSelect };
-      }
-      return { select: mockTestsSelect };
-    }),
-  })),
+  createClient: jest.fn((_url: string, key: string) => {
+    // Anon-key client — used only for JWT verification
+    if (key !== 'test-service-key') {
+      return { auth: { getUser: mockGetUser } };
+    }
+    // Service-role client — used for actual queries
+    return {
+      from: jest.fn().mockImplementation((table: string) => {
+        if (table === 'mv_error_counts_by_day') {
+          return { select: mockMvSelect };
+        }
+        return { select: mockTestsSelect };
+      }),
+    };
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -102,6 +112,13 @@ function getToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Set env vars so the mock can distinguish anon vs service-role clients
+beforeAll(() => {
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
+  process.env.SUPABASE_SERVICE_KEY = 'test-service-key';
+});
+
 describe('GET /api/summary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -112,6 +129,8 @@ describe('GET /api/summary', () => {
     mockTestsGte.mockReturnValue({ lte: mockTestsLte });
     mockMvSelect.mockReturnValue({ gte: mockMvGte });
     mockTestsSelect.mockReturnValue({ gte: mockTestsGte });
+    // Default: valid user
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null });
   });
 
   describe('validation', () => {
@@ -226,6 +245,19 @@ describe('GET /api/summary', () => {
         data: [{ day: '2026-03-22', location: 'resistor-R10', error_count: 2 }],
         error: null,
       });
+    });
+
+    it('returns 401 when JWT is invalid', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: null }, error: { message: 'invalid token' } });
+
+      const req = makeRequest(
+        { start: '2026-03-22', end: '2026-03-24' },
+        { authorization: 'Bearer invalid-jwt' },
+      );
+      const res = await GET(req);
+      expect(res.status).toBe(401);
+      const body = await res.json() as { error: string };
+      expect(body.error).toMatch(/invalid|expired/i);
     });
 
     it('aggregates byDayFixtureTester from Supabase data (3 tests → 2 groups)', async () => {
