@@ -16,15 +16,26 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import path from 'path';
 import fs from 'fs';
 import type { SummaryResponse, SummaryRow, ErrorCountRow } from '@/lib/testUtils';
 
 // ---------------------------------------------------------------------------
-// Supabase live path (service role — server-side aggregation, no per-row RLS)
+// Supabase clients
 // ---------------------------------------------------------------------------
 
+/** Anon-key client scoped to the caller's JWT — used only to verify identity. */
+function getSupabaseForUser(authHeader: string): SupabaseClient {
+  const url  = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  return createClient(url, anon, {
+    global: { headers: { Authorization: authHeader } },
+    auth:   { persistSession: false },
+  }) as SupabaseClient;
+}
+
+/** Service-role client for server-side aggregation (no per-row RLS). */
 function getSupabaseServiceClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL!;
   const key = process.env.SUPABASE_SERVICE_KEY!;
@@ -279,8 +290,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json(result satisfies SummaryResponse);
   }
 
-  // Authenticated path
+  // Authenticated path — verify the caller's JWT before running service-role queries
   try {
+    const userSb = getSupabaseForUser(authHeader);
+    const { data: { user }, error: authError } = await userSb.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    }
+
     const result = await fetchSummaryFromSupabase(start, end, filters);
     return NextResponse.json(result satisfies SummaryResponse);
   } catch (err) {
