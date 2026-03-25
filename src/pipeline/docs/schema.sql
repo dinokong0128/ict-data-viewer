@@ -64,15 +64,6 @@ ALTER TABLE tests ADD COLUMN IF NOT EXISTS source_file text;
 ALTER TABLE tests ADD COLUMN IF NOT EXISTS ingested_at       timestamptz DEFAULT now();
 ALTER TABLE tests ADD COLUMN IF NOT EXISTS error_locations   text[] DEFAULT '{}';
 
--- Backfill error_locations from existing test_errors rows
-UPDATE tests t SET error_locations = (
-  SELECT COALESCE(ARRAY_AGG(te.location ORDER BY te.location), '{}')
-  FROM test_errors te WHERE te.test_id = t.id
-) WHERE error_locations IS NULL OR error_locations = '{}';
-
--- GIN index for filtering on error_locations
-CREATE INDEX IF NOT EXISTS tests_error_locations_idx ON tests USING GIN (error_locations);
-
 -- Unique dedup constraint — safe for re-ingestion and partial-file scenarios
 DO $$ BEGIN
   ALTER TABLE tests
@@ -113,6 +104,21 @@ ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS low_limit_raw  text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_raw   text;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_value float8;
 ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS raw_block       text;
+
+-- Index on test_id for FK lookups and the backfill query below
+CREATE INDEX IF NOT EXISTS test_errors_test_id_idx ON test_errors (test_id);
+
+-- ============================================================
+-- 4b. Backfill tests.error_locations from test_errors
+-- Must run AFTER test_errors table + index exist.
+-- ============================================================
+UPDATE tests t SET error_locations = (
+  SELECT COALESCE(ARRAY_AGG(te.location ORDER BY te.location), '{}')
+  FROM test_errors te WHERE te.test_id = t.id
+) WHERE error_locations IS NULL OR error_locations = '{}';
+
+-- GIN index for filtering on error_locations (built after backfill for efficiency)
+CREATE INDEX IF NOT EXISTS tests_error_locations_idx ON tests USING GIN (error_locations);
 
 -- ============================================================
 -- 5. Rolling 3-month delete  (pg_cron)
