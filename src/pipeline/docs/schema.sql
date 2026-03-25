@@ -52,15 +52,26 @@ CREATE TABLE IF NOT EXISTS tests (
   operator_id  text,
   fixture_id   text,
   tester       text,
-  source_file  text,                  -- original log filename
-  ingested_at  timestamptz DEFAULT now()
+  source_file      text,                  -- original log filename
+  ingested_at      timestamptz DEFAULT now(),
+  error_locations  text[] DEFAULT '{}'    -- denormalised location codes from test_errors
 );
 
 -- Add new columns if upgrading from an older schema
 ALTER TABLE tests ADD COLUMN IF NOT EXISTS fixture_id  text;
 ALTER TABLE tests ADD COLUMN IF NOT EXISTS tester      text;
 ALTER TABLE tests ADD COLUMN IF NOT EXISTS source_file text;
-ALTER TABLE tests ADD COLUMN IF NOT EXISTS ingested_at timestamptz DEFAULT now();
+ALTER TABLE tests ADD COLUMN IF NOT EXISTS ingested_at       timestamptz DEFAULT now();
+ALTER TABLE tests ADD COLUMN IF NOT EXISTS error_locations   text[] DEFAULT '{}';
+
+-- Backfill error_locations from existing test_errors rows
+UPDATE tests t SET error_locations = (
+  SELECT COALESCE(ARRAY_AGG(te.location ORDER BY te.location), '{}')
+  FROM test_errors te WHERE te.test_id = t.id
+) WHERE error_locations IS NULL OR error_locations = '{}';
+
+-- GIN index for filtering on error_locations
+CREATE INDEX IF NOT EXISTS tests_error_locations_idx ON tests USING GIN (error_locations);
 
 -- Unique dedup constraint — safe for re-ingestion and partial-file scenarios
 DO $$ BEGIN
