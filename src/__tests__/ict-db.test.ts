@@ -117,7 +117,7 @@ describe('upsertTest', () => {
     });
   });
 
-  it('calls from("tests").upsert with correct fields', async () => {
+  it('calls from("tests").upsert with correct fields including error_locations', async () => {
     await upsertTest(PARSED);
     expect(mockFrom.mock.calls[2][0]).toBe('tests');
     const upsertArg = mockFrom.mock.results[2].value.upsert.mock.calls[0][0];
@@ -126,6 +126,7 @@ describe('upsertTest', () => {
       result:      'pass',
       operator_id: 'operator-01',
       source_file: 'PROD-001_SN-XXXX-000001.log',
+      error_locations: ['c01'],
     });
   });
 

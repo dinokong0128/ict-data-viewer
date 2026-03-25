@@ -38,7 +38,9 @@ export type TestRecord = {
   // from products join:
   product_name: string;
   part_number: string;
-  // from test_errors join:
+  // Denormalised from test_errors — location codes only (for filtering / summary).
+  error_locations: string[];
+  // Full error detail — populated on-demand via /api/test-errors, empty by default.
   test_errors: TestErrorRecord[];
 };
 
@@ -83,8 +85,11 @@ export function buildSummary(records: TestRecord[]): string[] {
 
   const errorCounts: Record<string, number> = {};
   records.forEach((r) => {
-    r.test_errors.forEach((e) => {
-      errorCounts[e.location] = (errorCounts[e.location] ?? 0) + 1;
+    const locations = r.test_errors.length > 0
+      ? r.test_errors.map((e) => e.location)
+      : r.error_locations;
+    locations.forEach((loc) => {
+      errorCounts[loc] = (errorCounts[loc] ?? 0) + 1;
     });
   });
   const topErrors = Object.entries(errorCounts)
@@ -107,9 +112,12 @@ export function buildErrorCounts(records: TestRecord[]): {
   const allErrors = new Set<string>();
   const counts = new Map<string, number>();
   records.forEach((r) => {
-    r.test_errors.forEach((e) => {
-      allErrors.add(e.location);
-      const key = `${getDateKey(r)}::${e.location}`;
+    const locations = r.test_errors.length > 0
+      ? r.test_errors.map((e) => e.location)
+      : r.error_locations;
+    locations.forEach((loc) => {
+      allErrors.add(loc);
+      const key = `${getDateKey(r)}::${loc}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     });
   });

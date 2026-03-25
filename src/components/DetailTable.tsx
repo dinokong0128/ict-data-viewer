@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import type { TestErrorRecord, TestRecord } from '@/lib/testUtils';
 
 type DetailTableProps = {
@@ -15,6 +15,7 @@ type DetailTableProps = {
   activeTester?: string;
   textFilter?: string;
   onTextFilterChange?: (value: string) => void;
+  authToken?: string;
 };
 
 const COLLAPSED_COUNT = 3;
@@ -23,63 +24,104 @@ function dash(value: string | null | undefined): string {
   return value == null || value === '' ? '—' : value;
 }
 
-function ErrorsCell({ errors, expanded, onToggle }: { errors: TestErrorRecord[]; expanded: boolean; onToggle: () => void }) {
-  if (errors.length === 0) return <span>—</span>;
+function ErrorsCell({
+  errorLocations,
+  errors,
+  expanded,
+  onToggle,
+  loading,
+}: {
+  errorLocations: string[];
+  errors: TestErrorRecord[];
+  expanded: boolean;
+  onToggle: () => void;
+  loading: boolean;
+}) {
+  if (errorLocations.length === 0 && errors.length === 0) return <span>—</span>;
 
-  if (errors.length <= COLLAPSED_COUNT) {
-    return <span>{errors.map((e) => e.location).join(', ')}</span>;
-  }
+  const locations = errors.length > 0 ? errors.map((e) => e.location) : errorLocations;
 
   if (!expanded) {
+    const display = locations.length <= COLLAPSED_COUNT
+      ? locations.join(', ')
+      : locations.slice(0, COLLAPSED_COUNT).join(', ');
     return (
-      <div>
-        <span>{errors.slice(0, COLLAPSED_COUNT).map((e) => e.location).join(', ')}</span>
-        <div>
-          <button
-            type="button"
-            onClick={onToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
-          >
-            Show all ({errors.length})
-          </button>
-        </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <span>{display}</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label="Expand errors"
+          title="Show error details"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#4338ca', padding: '0 2px', lineHeight: 1 }}
+        >
+          {locations.length > COLLAPSED_COUNT ? `+${locations.length - COLLAPSED_COUNT}` : ''}
+          <span style={{ fontSize: '12px', verticalAlign: 'middle' }}> ▶</span>
+        </button>
       </div>
     );
   }
 
+  if (loading) {
+    return (
+      <div>
+        <span style={{ fontSize: '12px', color: '#6b7280' }}>Loading error details...</span>
+      </div>
+    );
+  }
+
+  // Expanded — if full errors are available show the detail table, otherwise just locations
+  if (errors.length > 0) {
+    return (
+      <div>
+        <table style={{ fontSize: '12px', borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Error</th>
+              <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Measured</th>
+              <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>High limit</th>
+              <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Low limit</th>
+              <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Threshold</th>
+              <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {errors.map((e) => (
+              <tr key={e.location}>
+                <td style={{ padding: '2px 6px 2px 0' }}>{e.location}</td>
+                <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.measured_raw)}</td>
+                <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.high_limit_raw)}</td>
+                <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.low_limit_raw)}</td>
+                <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.threshold_raw)}</td>
+                <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.unit)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
+        >
+          Show less
+        </button>
+      </div>
+    );
+  }
+
+  // Fallback: only locations available (fetch may have returned empty)
   return (
     <div>
-      <table style={{ fontSize: '12px', borderCollapse: 'collapse', width: '100%' }}>
-        <thead>
-          <tr>
-            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Error</th>
-            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Measured</th>
-            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>High limit</th>
-            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Low limit</th>
-            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Threshold</th>
-            <th style={{ textAlign: 'left', padding: '2px 6px 2px 0', whiteSpace: 'nowrap' }}>Unit</th>
-          </tr>
-        </thead>
-        <tbody>
-          {errors.map((e) => (
-            <tr key={e.location}>
-              <td style={{ padding: '2px 6px 2px 0' }}>{e.location}</td>
-              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.measured_raw)}</td>
-              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.high_limit_raw)}</td>
-              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.low_limit_raw)}</td>
-              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.threshold_raw)}</td>
-              <td style={{ padding: '2px 6px 2px 0' }}>{dash(e.unit)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <button
-        type="button"
-        onClick={onToggle}
-        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
-      >
-        Show less
-      </button>
+      <span>{locations.join(', ')}</span>
+      <div>
+        <button
+          type="button"
+          onClick={onToggle}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: '#4338ca', padding: '2px 0' }}
+        >
+          Show less
+        </button>
+      </div>
     </div>
   );
 }
@@ -98,23 +140,63 @@ export function DetailTable({
   activeTester,
   textFilter,
   onTextFilterChange,
+  authToken,
 }: DetailTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [fetchedErrors, setFetchedErrors] = useState<Map<number, TestErrorRecord[]>>(new Map());
+  const [loadingRows, setLoadingRows] = useState<Set<number>>(new Set());
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
   const pageRows = rows.slice(start, start + pageSize);
 
-  function toggleRow(id: number) {
+  const toggleRow = useCallback((id: number, row: TestRecord) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
-      } else {
-        next.add(id);
+        return next;
       }
+      next.add(id);
+
+      // Fetch error details on-demand if not already loaded
+      if (row.test_errors.length === 0 && row.error_locations.length > 0 && !fetchedErrors.has(id) && !loadingRows.has(id)) {
+        setLoadingRows((p) => new Set(p).add(id));
+        const headers: Record<string, string> = {};
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+        fetch(`/api/test-errors?testIds=${id}`, { headers })
+          .then((res) => res.ok ? res.json() as Promise<{ errors: Record<string, TestErrorRecord[]> }> : Promise.resolve({ errors: {} as Record<string, TestErrorRecord[]> }))
+          .then((body) => {
+            setFetchedErrors((prev) => {
+              const next = new Map(prev);
+              next.set(id, body.errors[String(id)] ?? []);
+              return next;
+            });
+          })
+          .catch(() => {
+            // On failure, store empty array so we don't retry endlessly
+            setFetchedErrors((prev) => {
+              const next = new Map(prev);
+              next.set(id, []);
+              return next;
+            });
+          })
+          .finally(() => {
+            setLoadingRows((p) => {
+              const next = new Set(p);
+              next.delete(id);
+              return next;
+            });
+          });
+      }
+
       return next;
     });
+  }, [authToken, fetchedErrors, loadingRows]);
+
+  function getRowErrors(row: TestRecord): TestErrorRecord[] {
+    if (row.test_errors.length > 0) return row.test_errors;
+    return fetchedErrors.get(row.id) ?? [];
   }
 
   return (
@@ -245,9 +327,11 @@ export function DetailTable({
                 <td>{row.operator_id}</td>
                 <td>
                   <ErrorsCell
-                    errors={row.test_errors}
+                    errorLocations={row.error_locations}
+                    errors={getRowErrors(row)}
                     expanded={expandedRows.has(row.id)}
-                    onToggle={() => toggleRow(row.id)}
+                    onToggle={() => toggleRow(row.id, row)}
+                    loading={loadingRows.has(row.id)}
                   />
                 </td>
               </tr>
