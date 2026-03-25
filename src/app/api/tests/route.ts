@@ -13,7 +13,7 @@
  *   pageSize    — rows per page (default 50, max 200)
  *   product     — exact match on product_name
  *   fixture     — exact match on fixture_id
- *   sn          — exact match on board_id / serial_number
+ *   sn          — exact match on serial_number (via boards join)
  *   tester      — exact match on tester
  *   result      — 'pass' or 'fail'
  *   q           — free-text ILIKE against serial_number, tester, fixture_id, operator_id
@@ -64,14 +64,14 @@ function applyFilters(query: any, start: string, end: string, filters: TestsFilt
   if (filters.product) q = q.eq('boards.products.product_name', filters.product);
   if (filters.fixture) q = q.eq('fixture_id', filters.fixture);
   if (filters.tester)  q = q.eq('tester', filters.tester);
-  if (filters.sn)      q = q.eq('board_id', filters.sn);
+  if (filters.sn)      q = q.eq('boards.serial_number', filters.sn);
   if (filters.result)  q = q.eq('result', filters.result);
 
   if (filters.q) {
     const escaped = filters.q.replace(/[%_]/g, '\\$&');
     q = q.or(
       [
-        `board_id.ilike.%${escaped}%`,
+        `boards.serial_number.ilike.%${escaped}%`,
         `tester.ilike.%${escaped}%`,
         `fixture_id.ilike.%${escaped}%`,
         `operator_id.ilike.%${escaped}%`,
@@ -262,7 +262,7 @@ function fetchFromFixture(
     // Apply optional filters
     if (filters.fixture && record.fixture_id !== filters.fixture) continue;
     if (filters.tester  && record.tester      !== filters.tester)  continue;
-    if (filters.sn      && record.board_id    !== filters.sn)       continue;
+    if (filters.sn      && record.serial_number !== filters.sn)      continue;
     if (filters.result  && record.result      !== filters.result)   continue;
     if (filters.product && record.product_name !== filters.product) continue;
     if (filters.q       && !matchesTextFilter(record, filters.q))   continue;
