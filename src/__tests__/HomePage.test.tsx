@@ -66,7 +66,7 @@ const isoYesterday = yesterday.toISOString().slice(0, 19) + 'Z';
 const isoYesterdayDate = isoYesterday.slice(0, 10);
 
 const MOCK_RECORD: TestRecord = {
-  id: 1,
+  id: '1',
   board_id: 'SN-XXXX-000001',
   start_time: isoYesterday,
   end_time: isoYesterday,
@@ -286,7 +286,7 @@ describe('HomePage', () => {
   describe('U6 — text filter (server-side)', () => {
     const RECORD_A: TestRecord = {
       ...MOCK_RECORD,
-      id: 10,
+      id: '10',
       serial_number: 'SN-ALPHA-001',
       product_name: 'Alpha Board',
       tester: 'tester-alpha',
@@ -298,7 +298,7 @@ describe('HomePage', () => {
     };
     const RECORD_B: TestRecord = {
       ...MOCK_RECORD,
-      id: 11,
+      id: '11',
       serial_number: 'SN-BETA-002',
       product_name: 'Beta Board',
       tester: 'tester-beta',
@@ -310,7 +310,7 @@ describe('HomePage', () => {
     };
     const RECORD_WITH_ERROR: TestRecord = {
       ...MOCK_RECORD,
-      id: 12,
+      id: '12',
       serial_number: 'SN-ERR-003',
       product_name: 'Error Board',
       tester: 'tester-err',

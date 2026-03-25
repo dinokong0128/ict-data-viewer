@@ -146,15 +146,15 @@ export function DetailTable({
   authToken,
   totalRows,
 }: DetailTableProps) {
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [fetchedErrors, setFetchedErrors] = useState<Map<number, TestErrorRecord[]>>(new Map());
-  const [loadingRows, setLoadingRows] = useState<Set<number>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [fetchedErrors, setFetchedErrors] = useState<Map<string, TestErrorRecord[]>>(new Map());
+  const [loadingRows, setLoadingRows] = useState<Set<string>>(new Set());
   const totalPages = Math.max(1, Math.ceil((totalRows ?? rows.length) / pageSize));
   const currentPage = Math.min(page, totalPages);
   // When totalRows is provided, rows is already the current page — no slicing needed
   const pageRows = totalRows != null ? rows : rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  const toggleRow = useCallback((id: number, row: TestRecord) => {
+  const toggleRow = useCallback((id: string, row: TestRecord) => {
     setExpandedRows((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -168,12 +168,12 @@ export function DetailTable({
         setLoadingRows((p) => new Set(p).add(id));
         const headers: Record<string, string> = {};
         if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-        fetch(`/api/test-errors?testIds=${id}`, { headers })
-          .then((res) => res.ok ? res.json() as Promise<{ errors: Record<string, TestErrorRecord[]> }> : Promise.resolve({ errors: {} as Record<string, TestErrorRecord[]> }))
+        fetch(`/api/tests/${id}/errors`, { headers })
+          .then((res) => res.ok ? res.json() as Promise<{ errors: TestErrorRecord[] }> : Promise.resolve({ errors: [] as TestErrorRecord[] }))
           .then((body) => {
             setFetchedErrors((prev) => {
               const next = new Map(prev);
-              next.set(id, body.errors[String(id)] ?? []);
+              next.set(id, body.errors ?? []);
               return next;
             });
           })

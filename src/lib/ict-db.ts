@@ -94,7 +94,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
   // If null the row already existed (ignoreDuplicates); skip errors to avoid duplication
   if (!testData) return;
 
-  const testId = testData.id as number;
+  const testId = testData.id as string;
 
   // 4. test_errors
   if (parsed.errors.length === 0) return;
@@ -117,4 +117,14 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
     }))
   );
   if (errErr) throw new Error(`test_errors insert failed: ${errErr.message}`);
+}
+
+/**
+ * Refresh materialized views used by /api/summary.
+ * Call after a batch of upserts to keep aggregated data current.
+ */
+export async function refreshMaterializedViews(): Promise<void> {
+  const sb = getClient();
+  const { error } = await sb.rpc('refresh_mv_summary');
+  if (error) throw new Error(`MV refresh failed: ${error.message}`);
 }

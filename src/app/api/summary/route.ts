@@ -1,16 +1,14 @@
 /**
- * GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD[&product=...&fixture=...&sn=...&tester=...]
+ * GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD[&product=...&fixture=...&tester=...]
  *
  * Returns pre-aggregated summary data for the dashboard chart and summary panel.
- * Two tiers:
- *   byDayFixtureTester — live query (~200–600ms), filtered by optional params
- *   errorsByDayLocation — reads mv_error_counts_by_day (~fast), NOT filtered by
- *                         product/fixture/sn/tester (materialized view carries no
- *                         those fields — accepted approximation)
+ * Two materialized views (both filterable by product/fixture/tester):
+ *   byDayFixtureTester  — reads mv_summary_by_day
+ *   errorsByDayLocation — reads mv_error_counts_by_day
  *
  * Data routing:
  *   - Authenticated request (Authorization: Bearer <jwt>):
- *       Queries Supabase using the service role key for server-side aggregation.
+ *       Queries Supabase materialized views using the service role key.
  *   - Guest request (no Authorization header):
  *       Computes in-memory from src/fixtures/guest-data.json.
  */
@@ -45,7 +43,6 @@ function getSupabaseServiceClient() {
 type SummaryFilters = {
   product?: string;
   fixture?: string;
-  sn?: string;
   tester?: string;
 };
 
@@ -55,87 +52,40 @@ async function fetchSummaryFromSupabase(
   filters: SummaryFilters,
 ): Promise<SummaryResponse> {
   const sb = getSupabaseServiceClient();
-  const endTs = end + 'T23:59:59Z';
 
-  // Query A — live row-level query; aggregated in JS since PostgREST can't GROUP BY.
-  // Note: product_name filtering goes through the join: boards.products.product_name
-  let qA = sb
-    .from('tests')
-    .select(
-      `start_time, fixture_id, tester, operator_id, result, board_id,
-       boards!inner ( serial_number, product_id,
-         products!inner ( product_name ) )`,
-    )
-    .gte('start_time', start)
-    .lte('start_time', endTs);
-
+  // Query A — mv_summary_by_day (pre-aggregated by day/fixture/tester/operator/product)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let qA: any = sb.from('mv_summary_by_day').select('*')
+    .gte('day', start).lte('day', end);
   if (filters.fixture) qA = qA.eq('fixture_id', filters.fixture);
   if (filters.tester)  qA = qA.eq('tester', filters.tester);
-  if (filters.sn)      qA = qA.eq('board_id', filters.sn);
-  if (filters.product) qA = qA.eq('boards.products.product_name', filters.product);
+  if (filters.product) qA = qA.eq('product_name', filters.product);
 
-  // Query B — read materialized view (no extra filters)
-  const qB = sb
-    .from('mv_error_counts_by_day')
-    .select('day, location, error_count')
-    .gte('day', start)
-    .lte('day', end);
+  // Query B — mv_error_counts_by_day (pre-aggregated by day/location/fixture/tester/product)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let qB: any = sb.from('mv_error_counts_by_day').select('*')
+    .gte('day', start).lte('day', end);
+  if (filters.fixture) qB = qB.eq('fixture_id', filters.fixture);
+  if (filters.tester)  qB = qB.eq('tester', filters.tester);
+  if (filters.product) qB = qB.eq('product_name', filters.product);
 
   const [resultA, resultB] = await Promise.all([qA, qB]);
 
-  if (resultA.error) throw new Error(`Summary query A failed: ${resultA.error.message}`);
-  if (resultB.error) throw new Error(`Summary query B failed: ${resultB.error.message}`);
+  if (resultA.error) throw new Error(`Summary query failed: ${resultA.error.message}`);
+  if (resultB.error) throw new Error(`Error counts query failed: ${resultB.error.message}`);
 
-  // Aggregate Query A rows in JS (PostgREST can't GROUP BY)
-  type RawRow = {
-    start_time: string;
-    fixture_id: string;
-    tester: string;
-    operator_id: string;
-    result: string;
-    board_id: string;
-    boards: { serial_number: string; product_id: string; products: { product_name: string } } | null;
-  };
+  const byDayFixtureTester: SummaryRow[] = (resultA.data ?? []).map((r: any) => ({
+    day: typeof r.day === 'string' ? r.day : new Date(r.day).toISOString().slice(0, 10),
+    fixture_id: r.fixture_id ?? '',
+    tester: r.tester ?? '',
+    operator_id: r.operator_id ?? '',
+    total: Number(r.total),
+    pass: Number(r.pass),
+    fail: Number(r.fail),
+    unique_boards: Number(r.unique_boards),
+  }));
 
-  const rawRows = (resultA.data ?? []) as unknown as RawRow[];
-  const grouped = new Map<string, SummaryRow>();
-  for (const r of rawRows) {
-    const day = r.start_time.slice(0, 10);
-    const key = `${day}|${r.fixture_id ?? ''}|${r.tester ?? ''}|${r.operator_id ?? ''}`;
-    const existing = grouped.get(key) ?? {
-      day,
-      fixture_id: r.fixture_id ?? '',
-      tester: r.tester ?? '',
-      operator_id: r.operator_id ?? '',
-      total: 0,
-      pass: 0,
-      fail: 0,
-      unique_boards: 0,
-    };
-    existing.total += 1;
-    if (r.result === 'pass') existing.pass += 1;
-    else existing.fail += 1;
-    grouped.set(key, existing);
-  }
-
-  // Compute unique_boards per group
-  const boardSets = new Map<string, Set<string>>();
-  for (const r of rawRows) {
-    const day = r.start_time.slice(0, 10);
-    const key = `${day}|${r.fixture_id ?? ''}|${r.tester ?? ''}|${r.operator_id ?? ''}`;
-    if (!boardSets.has(key)) boardSets.set(key, new Set());
-    boardSets.get(key)!.add(r.board_id);
-  }
-  for (const [key, row] of grouped) {
-    row.unique_boards = boardSets.get(key)?.size ?? 0;
-  }
-
-  const byDayFixtureTester = Array.from(grouped.values()).sort((a, b) =>
-    a.day.localeCompare(b.day),
-  );
-
-  type MvRow = { day: string; location: string; error_count: number };
-  const errorsByDayLocation: ErrorCountRow[] = ((resultB.data ?? []) as MvRow[]).map((r) => ({
+  const errorsByDayLocation: ErrorCountRow[] = (resultB.data ?? []).map((r: any) => ({
     day: typeof r.day === 'string' ? r.day : new Date(r.day).toISOString().slice(0, 10),
     location: r.location,
     error_count: Number(r.error_count),
@@ -201,7 +151,6 @@ function fetchSummaryFromFixture(
     // Apply optional filters
     if (filters.fixture && test.fixture_id !== filters.fixture) continue;
     if (filters.tester  && test.tester      !== filters.tester)  continue;
-    if (filters.sn      && test.board_id    !== filters.sn)       continue;
     if (filters.product && product?.product_name !== filters.product) continue;
 
     const day = new Date(shiftedMs).toISOString().slice(0, 10);
@@ -224,11 +173,20 @@ function fetchSummaryFromFixture(
     row.unique_boards = boardSets.get(key)?.size ?? 0;
   }
 
-  // Build error counts by day (from test_errors joined to matching tests)
+  // Build error counts by day (from test_errors joined to matching tests, filtered)
   const matchingTestIds = new Set<number>();
   for (const test of fixture.tests) {
     const shiftedMs = new Date(test.start_time).getTime() + offsetMs;
     if (shiftedMs < filterStart || shiftedMs > filterEnd) continue;
+
+    const board   = boardMap.get(test.board_id);
+    const product = board ? productMap.get(board.product_id) : undefined;
+
+    // Apply same filters as byDayFixtureTester
+    if (filters.fixture && test.fixture_id !== filters.fixture) continue;
+    if (filters.tester  && test.tester      !== filters.tester)  continue;
+    if (filters.product && product?.product_name !== filters.product) continue;
+
     matchingTestIds.add(test.id);
   }
 
@@ -278,7 +236,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const filters: SummaryFilters = {
     product: searchParams.get('product') ?? undefined,
     fixture: searchParams.get('fixture') ?? undefined,
-    sn:      searchParams.get('sn')      ?? undefined,
     tester:  searchParams.get('tester')  ?? undefined,
   };
 

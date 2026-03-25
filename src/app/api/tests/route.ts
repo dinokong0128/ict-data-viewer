@@ -13,7 +13,7 @@
  *   pageSize    — rows per page (default 50, max 200)
  *   product     — exact match on product_name
  *   fixture     — exact match on fixture_id
- *   sn          — exact match on board_id / serial_number
+ *   sn          — exact match on serial_number (via boards join)
  *   tester      — exact match on tester
  *   result      — 'pass' or 'fail'
  *   q           — free-text ILIKE against serial_number, tester, fixture_id, operator_id
@@ -64,14 +64,14 @@ function applyFilters(query: any, start: string, end: string, filters: TestsFilt
   if (filters.product) q = q.eq('boards.products.product_name', filters.product);
   if (filters.fixture) q = q.eq('fixture_id', filters.fixture);
   if (filters.tester)  q = q.eq('tester', filters.tester);
-  if (filters.sn)      q = q.eq('board_id', filters.sn);
+  if (filters.sn)      q = q.eq('boards.serial_number', filters.sn);
   if (filters.result)  q = q.eq('result', filters.result);
 
   if (filters.q) {
     const escaped = filters.q.replace(/[%_]/g, '\\$&');
     q = q.or(
       [
-        `board_id.ilike.%${escaped}%`,
+        `boards.serial_number.ilike.%${escaped}%`,
         `tester.ilike.%${escaped}%`,
         `fixture_id.ilike.%${escaped}%`,
         `operator_id.ilike.%${escaped}%`,
@@ -124,7 +124,7 @@ async function fetchFromSupabase(
   if (dataResult.error)  throw new Error(`Data query failed: ${dataResult.error.message}`);
 
   const records = (dataResult.data ?? []).map((row: any): TestRecord => ({
-    id:           row.id,
+    id:           String(row.id),
     board_id:     row.board_id,
     start_time:   row.start_time,
     end_time:     row.end_time,
@@ -199,9 +199,10 @@ function fetchFromFixture(
 
   const boardMap = new Map(fixture.boards.map((b) => [b.serial_number, b]));
   const productMap = new Map(fixture.products.map((p) => [p.part_number, p]));
-  const errorsByTestId = new Map<number, TestErrorRecord[]>();
+  const errorsByTestId = new Map<string, TestErrorRecord[]>();
   fixture.test_errors.forEach((e) => {
-    const list = errorsByTestId.get(e.test_id) ?? [];
+    const key = String(e.test_id);
+    const list = errorsByTestId.get(key) ?? [];
     list.push({
       error_type:     e.error_type,
       location:       e.location,
@@ -214,7 +215,7 @@ function fetchFromFixture(
       low_limit_raw:  e.low_limit_raw,
       threshold_raw:  e.threshold_raw,
     });
-    errorsByTestId.set(e.test_id, list);
+    errorsByTestId.set(key, list);
   });
 
   // Offset timestamps so the latest test appears as today
@@ -238,7 +239,7 @@ function fetchFromFixture(
     const product = board ? productMap.get(board.product_id) : undefined;
 
     const record: TestRecord = {
-      id:           test.id,
+      id:           String(test.id),
       board_id:     test.board_id,
       start_time:   shiftISO(test.start_time),
       end_time:     shiftISO(test.end_time),
@@ -254,14 +255,14 @@ function fetchFromFixture(
       product_id:   board?.product_id     ?? '',
       product_name: product?.product_name ?? '',
       part_number:  product?.part_number  ?? '',
-      error_locations: (errorsByTestId.get(test.id) ?? []).map((e) => e.location),
+      error_locations: (errorsByTestId.get(String(test.id)) ?? []).map((e) => e.location),
       test_errors:  [],
     };
 
     // Apply optional filters
     if (filters.fixture && record.fixture_id !== filters.fixture) continue;
     if (filters.tester  && record.tester      !== filters.tester)  continue;
-    if (filters.sn      && record.board_id    !== filters.sn)       continue;
+    if (filters.sn      && record.serial_number !== filters.sn)      continue;
     if (filters.result  && record.result      !== filters.result)   continue;
     if (filters.product && record.product_name !== filters.product) continue;
     if (filters.q       && !matchesTextFilter(record, filters.q))   continue;
