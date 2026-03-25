@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseLog } from '@/lib/ict-parser';
-import { upsertTest } from '@/lib/ict-db';
+import { upsertTest, refreshMaterializedViews } from '@/lib/ict-db';
 
 interface IngestFile {
   filename: string;
@@ -86,6 +86,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     } catch (err) {
       failed.push({ filename, error: err instanceof Error ? err.message : String(err) });
     }
+  }
+
+  // Refresh materialized views so /api/summary reflects newly ingested data
+  if (processed > 0) {
+    try { await refreshMaterializedViews(); } catch { /* non-fatal */ }
   }
 
   return NextResponse.json({ processed, failed });

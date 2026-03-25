@@ -2,8 +2,9 @@
  * testUtils.ts — shared types and analytics helpers for ICT test data.
  *
  * Used by:
- *   - src/app/api/tests/route.ts  (produces TestRecord[])
- *   - src/pages/index.tsx          (consumes TestRecord[])
+ *   - src/app/api/tests/route.ts    (produces TestRecord[])
+ *   - src/app/api/summary/route.ts  (produces SummaryResponse)
+ *   - src/pages/index.tsx            (consumes TestRecord[], SummaryResponse)
  */
 
 export type TestErrorRecord = {
@@ -20,8 +21,8 @@ export type TestErrorRecord = {
 };
 
 export type TestRecord = {
-  id: number;
-  board_id: string;      // = serial_number (FK to boards)
+  id: string;            // UUID in production, numeric string in guest fixtures
+  board_id: string;      // UUID FK to boards.id
   start_time: string;    // ISO 8601
   end_time: string;      // ISO 8601
   result: 'pass' | 'fail';
@@ -40,7 +41,7 @@ export type TestRecord = {
   part_number: string;
   // Denormalised from test_errors — location codes only (for filtering / summary).
   error_locations: string[];
-  // Full error detail — populated on-demand via /api/test-errors, empty by default.
+  // Full error detail — populated on-demand via /api/tests/:id/errors, empty by default.
   test_errors: TestErrorRecord[];
 };
 
@@ -49,6 +50,40 @@ export type UtilizationEntry = {
   count: number;
   days: number;
   perDay: number;
+};
+
+// ---------------------------------------------------------------------------
+// Summary / paginated-tests API response types
+// ---------------------------------------------------------------------------
+
+export type SummaryRow = {
+  day: string;         // "YYYY-MM-DD"
+  fixture_id: string;
+  tester: string;
+  operator_id: string;
+  total: number;
+  pass: number;
+  fail: number;
+  unique_boards: number;
+};
+
+export type ErrorCountRow = {
+  day: string;         // "YYYY-MM-DD"
+  location: string;
+  error_count: number;
+};
+
+export type SummaryResponse = {
+  byDayFixtureTester: SummaryRow[];
+  errorsByDayLocation: ErrorCountRow[];
+};
+
+export type TestsPageResponse = {
+  records: TestRecord[];
+  total: number;
+  page: number;
+  pageSize: number;
+  demo: boolean;
 };
 
 export function formatDate(d: Date): string {
