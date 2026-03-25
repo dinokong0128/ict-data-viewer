@@ -89,9 +89,9 @@ function fetchFromFixture(testId: string): TestErrorRecord[] {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { testId: string } },
+  { params }: { params: Promise<{ testId: string }> },
 ): Promise<NextResponse> {
-  const { testId } = params;
+  const { testId } = await params;
 
   if (!testId || !isValidTestId(testId)) {
     return NextResponse.json(
