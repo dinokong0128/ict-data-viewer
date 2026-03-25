@@ -79,7 +79,7 @@ beforeEach(() => {
   const boardsUpsertFn = jest.fn().mockReturnValue({ select: boardsSelectFn });
   const boardsChain = { upsert: boardsUpsertFn };
   // tests upsert — chain: .upsert().select().maybeSingle()
-  const maybeSingleFn = jest.fn().mockResolvedValue({ data: { id: 42 }, error: null });
+  const maybeSingleFn = jest.fn().mockResolvedValue({ data: { id: '550e8400-e29b-41d4-a716-446655440000' }, error: null });
   const selectFn = jest.fn().mockReturnValue({ maybeSingle: maybeSingleFn });
   const testsUpsertFn = jest.fn().mockReturnValue({ select: selectFn });
   const testsChain = { upsert: testsUpsertFn };
@@ -136,7 +136,7 @@ describe('upsertTest', () => {
     const insertArg = mockFrom.mock.results[3].value.insert.mock.calls[0][0];
     expect(insertArg).toHaveLength(1);
     expect(insertArg[0]).toMatchObject({
-      test_id:    42,
+      test_id:    '550e8400-e29b-41d4-a716-446655440000',
       error_type: 'analog',
       location:   'c01',
       part_spec:  '1UF',

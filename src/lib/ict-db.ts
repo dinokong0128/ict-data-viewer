@@ -94,7 +94,7 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
   // If null the row already existed (ignoreDuplicates); skip errors to avoid duplication
   if (!testData) return;
 
-  const testId = testData.id as number;
+  const testId = testData.id as string;
 
   // 4. test_errors
   if (parsed.errors.length === 0) return;

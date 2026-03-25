@@ -21,8 +21,8 @@ export type TestErrorRecord = {
 };
 
 export type TestRecord = {
-  id: number;
-  board_id: string;      // = serial_number (FK to boards)
+  id: string;            // UUID in production, numeric string in guest fixtures
+  board_id: string;      // UUID FK to boards.id
   start_time: string;    // ISO 8601
   end_time: string;      // ISO 8601
   result: 'pass' | 'fail';
@@ -41,7 +41,7 @@ export type TestRecord = {
   part_number: string;
   // Denormalised from test_errors — location codes only (for filtering / summary).
   error_locations: string[];
-  // Full error detail — populated on-demand via /api/test-errors, empty by default.
+  // Full error detail — populated on-demand via /api/tests/:id/errors, empty by default.
   test_errors: TestErrorRecord[];
 };
 

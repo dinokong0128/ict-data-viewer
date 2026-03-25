@@ -124,7 +124,7 @@ async function fetchFromSupabase(
   if (dataResult.error)  throw new Error(`Data query failed: ${dataResult.error.message}`);
 
   const records = (dataResult.data ?? []).map((row: any): TestRecord => ({
-    id:           row.id,
+    id:           String(row.id),
     board_id:     row.board_id,
     start_time:   row.start_time,
     end_time:     row.end_time,
@@ -199,9 +199,10 @@ function fetchFromFixture(
 
   const boardMap = new Map(fixture.boards.map((b) => [b.serial_number, b]));
   const productMap = new Map(fixture.products.map((p) => [p.part_number, p]));
-  const errorsByTestId = new Map<number, TestErrorRecord[]>();
+  const errorsByTestId = new Map<string, TestErrorRecord[]>();
   fixture.test_errors.forEach((e) => {
-    const list = errorsByTestId.get(e.test_id) ?? [];
+    const key = String(e.test_id);
+    const list = errorsByTestId.get(key) ?? [];
     list.push({
       error_type:     e.error_type,
       location:       e.location,
@@ -214,7 +215,7 @@ function fetchFromFixture(
       low_limit_raw:  e.low_limit_raw,
       threshold_raw:  e.threshold_raw,
     });
-    errorsByTestId.set(e.test_id, list);
+    errorsByTestId.set(key, list);
   });
 
   // Offset timestamps so the latest test appears as today
@@ -238,7 +239,7 @@ function fetchFromFixture(
     const product = board ? productMap.get(board.product_id) : undefined;
 
     const record: TestRecord = {
-      id:           test.id,
+      id:           String(test.id),
       board_id:     test.board_id,
       start_time:   shiftISO(test.start_time),
       end_time:     shiftISO(test.end_time),
@@ -254,7 +255,7 @@ function fetchFromFixture(
       product_id:   board?.product_id     ?? '',
       product_name: product?.product_name ?? '',
       part_number:  product?.part_number  ?? '',
-      error_locations: (errorsByTestId.get(test.id) ?? []).map((e) => e.location),
+      error_locations: (errorsByTestId.get(String(test.id)) ?? []).map((e) => e.location),
       test_errors:  [],
     };
 

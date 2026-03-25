@@ -7,36 +7,51 @@
 --   Database → Extensions → enable pg_cron
 
 -- ============================================================
+-- Custom enum types
+-- ============================================================
+DO $$ BEGIN
+  CREATE TYPE test_result AS ENUM ('pass', 'fail');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE error_type AS ENUM ('analog', 'digital_pin', 'shorts_report', 'unknown');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- ============================================================
 -- 1. products — one row per board family / part number
 -- ============================================================
 CREATE TABLE IF NOT EXISTS products (
-  part_number   text PRIMARY KEY,
-  product_name  text
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  part_number   text UNIQUE,
+  product_name  text,
+  family        text
 );
 
--- Add new columns if upgrading from an older schema
 ALTER TABLE products ADD COLUMN IF NOT EXISTS product_name text;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS family       text;
 
 -- ============================================================
 -- 2. boards — one row per unique serial number
 -- ============================================================
 CREATE TABLE IF NOT EXISTS boards (
-  serial_number text PRIMARY KEY,
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  serial_number text UNIQUE,
   mac_address   text,
   rev           text,
-  product_id    text REFERENCES products(part_number)
+  product_id    uuid REFERENCES products(id)
 );
 
--- Add new columns if upgrading from an older schema
 ALTER TABLE boards ADD COLUMN IF NOT EXISTS mac_address text;
 ALTER TABLE boards ADD COLUMN IF NOT EXISTS rev         text;
 
 -- product_id FK — add column first (no FK), then constraint separately
-ALTER TABLE boards ADD COLUMN IF NOT EXISTS product_id text;
+ALTER TABLE boards ADD COLUMN IF NOT EXISTS product_id uuid;
 DO $$ BEGIN
   ALTER TABLE boards
     ADD CONSTRAINT boards_product_id_fkey
-    FOREIGN KEY (product_id) REFERENCES products(part_number);
+    FOREIGN KEY (product_id) REFERENCES products(id);
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -44,11 +59,11 @@ END $$;
 -- 3. tests — one row per test session (= one log file)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS tests (
-  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  board_id     text        NOT NULL REFERENCES boards(serial_number),
+  id           uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  board_id     uuid        NOT NULL REFERENCES boards(id),
   start_time   timestamptz NOT NULL,
   end_time     timestamptz NOT NULL,
-  result       text        NOT NULL,  -- 'pass' or 'fail'
+  result       test_result NOT NULL,
   operator_id  text,
   fixture_id   text,
   tester       text,
@@ -76,34 +91,43 @@ END $$;
 -- 4. test_errors — one row per failing component per test
 -- ============================================================
 CREATE TABLE IF NOT EXISTS test_errors (
-  id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  test_id        bigint NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
-  error_type     text,               -- 'analog' | 'digital_pin' | 'shorts_report' | 'unknown'
-  location       text,               -- PCB component reference, e.g. "c01", "r03"
-  subtest        text,               -- sub-test name or NULL
-  part_spec      text,               -- component value, e.g. "1UF", "22.1"
-  unit           text,               -- "FARADS" | "OHMS" | ""
-  measured_raw   text,               -- e.g. "0.78327u"
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  test_id        uuid NOT NULL REFERENCES tests(id) ON DELETE CASCADE,
+  error_type     error_type,            -- 'analog' | 'digital_pin' | 'shorts_report' | 'unknown'
+  location       text,                  -- PCB component reference, e.g. "c01", "r03"
+  subtest        text,                  -- sub-test name or NULL
+  part_spec      text,                  -- component value, e.g. "1UF", "22.1"
+  unit           text,                  -- "FARADS" | "OHMS" | ""
+  measured_raw   text,                  -- e.g. "0.78327u"
+  measured_value float8,                -- parsed numeric value
   nominal_raw    text,
+  nominal_value  float8,
   high_limit_raw text,
+  high_limit_value float8,
   low_limit_raw  text,
-  threshold_raw  text,               -- for shorts/resistance checks; NULL otherwise
-  raw_block      text                -- raw log lines that produced this error; enables re-parsing
+  low_limit_value float8,
+  threshold_raw  text,                  -- for shorts/resistance checks; NULL otherwise
+  threshold_value float8,
+  raw_block      text                   -- raw log lines that produced this error; enables re-parsing
 );
 
 -- Add new columns if upgrading from an older schema
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS error_type     text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS location       text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS subtest        text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS part_spec      text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS unit           text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS measured_raw   text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS nominal_raw    text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS high_limit_raw text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS low_limit_raw  text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_raw   text;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_value float8;
-ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS raw_block       text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS error_type       error_type;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS location         text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS subtest          text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS part_spec        text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS unit             text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS measured_raw     text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS measured_value   float8;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS nominal_raw      text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS nominal_value    float8;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS high_limit_raw   text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS high_limit_value float8;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS low_limit_raw    text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS low_limit_value  float8;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_raw    text;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS threshold_value  float8;
+ALTER TABLE test_errors ADD COLUMN IF NOT EXISTS raw_block        text;
 
 -- Index on test_id for FK lookups and the backfill query below
 CREATE INDEX IF NOT EXISTS test_errors_test_id_idx ON test_errors (test_id);
@@ -121,7 +145,93 @@ UPDATE tests t SET error_locations = (
 CREATE INDEX IF NOT EXISTS tests_error_locations_idx ON tests USING GIN (error_locations);
 
 -- ============================================================
--- 5. Rolling 3-month delete  (pg_cron)
+-- 5. Materialized view — error counts by day + location
+-- ============================================================
+CREATE MATERIALIZED VIEW IF NOT EXISTS mv_error_counts_by_day AS
+  SELECT
+    (date_trunc('day', t.start_time))::date AS day,
+    te.location,
+    count(*) AS error_count
+  FROM test_errors te
+    JOIN tests t ON t.id = te.test_id
+  GROUP BY (date_trunc('day', t.start_time))::date, te.location;
+
+-- ============================================================
+-- 6. RPC functions for summary aggregation
+-- ============================================================
+CREATE OR REPLACE FUNCTION summary_by_day_fixture_tester(
+  p_start timestamptz,
+  p_end timestamptz,
+  p_fixture text DEFAULT NULL,
+  p_tester text DEFAULT NULL,
+  p_sn text DEFAULT NULL,
+  p_product text DEFAULT NULL
+)
+RETURNS TABLE (
+  day date,
+  fixture_id text,
+  tester text,
+  operator_id text,
+  total bigint,
+  pass bigint,
+  fail bigint,
+  unique_boards bigint
+) AS $$
+  SELECT
+    (t.start_time AT TIME ZONE 'UTC')::date AS day,
+    t.fixture_id,
+    t.tester,
+    t.operator_id,
+    COUNT(*) AS total,
+    COUNT(*) FILTER (WHERE t.result = 'pass') AS pass,
+    COUNT(*) FILTER (WHERE t.result != 'pass') AS fail,
+    COUNT(DISTINCT t.board_id) AS unique_boards
+  FROM tests t
+    JOIN boards b ON b.id = t.board_id
+    JOIN products p ON p.id = b.product_id
+  WHERE t.start_time >= p_start
+    AND t.start_time <= p_end
+    AND (p_fixture IS NULL OR t.fixture_id = p_fixture)
+    AND (p_tester IS NULL OR t.tester = p_tester)
+    AND (p_sn IS NULL OR b.serial_number = p_sn)
+    AND (p_product IS NULL OR p.product_name = p_product)
+  GROUP BY (t.start_time AT TIME ZONE 'UTC')::date, t.fixture_id, t.tester, t.operator_id
+  ORDER BY day;
+$$ LANGUAGE sql STABLE;
+
+CREATE OR REPLACE FUNCTION error_counts_by_day_location(
+  p_start timestamptz,
+  p_end timestamptz,
+  p_fixture text DEFAULT NULL,
+  p_tester text DEFAULT NULL,
+  p_sn text DEFAULT NULL,
+  p_product text DEFAULT NULL
+)
+RETURNS TABLE (
+  day date,
+  location text,
+  error_count bigint
+) AS $$
+  SELECT
+    (t.start_time AT TIME ZONE 'UTC')::date AS day,
+    te.location,
+    COUNT(*) AS error_count
+  FROM test_errors te
+    JOIN tests t ON t.id = te.test_id
+    JOIN boards b ON b.id = t.board_id
+    JOIN products p ON p.id = b.product_id
+  WHERE t.start_time >= p_start
+    AND t.start_time <= p_end
+    AND (p_fixture IS NULL OR t.fixture_id = p_fixture)
+    AND (p_tester IS NULL OR t.tester = p_tester)
+    AND (p_sn IS NULL OR b.serial_number = p_sn)
+    AND (p_product IS NULL OR p.product_name = p_product)
+  GROUP BY (t.start_time AT TIME ZONE 'UTC')::date, te.location
+  ORDER BY day, error_count DESC;
+$$ LANGUAGE sql STABLE;
+
+-- ============================================================
+-- 7. Rolling 3-month delete  (pg_cron)
 -- Runs daily at 02:00 UTC; test_errors cascade automatically.
 -- ============================================================
 DO $$ BEGIN

@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { DetailTable } from '@/components/DetailTable';
 import type { TestRecord } from '@/lib/testUtils';
 
-function makeRecord(overrides: Partial<TestRecord> & { id: number; serial_number: string }): TestRecord {
+function makeRecord(overrides: Partial<TestRecord> & { id: string; serial_number: string }): TestRecord {
   return {
     board_id:     overrides.serial_number,
     start_time:   '2026-03-12T08:00:00Z',
@@ -25,8 +25,8 @@ function makeRecord(overrides: Partial<TestRecord> & { id: number; serial_number
 }
 
 const rows: TestRecord[] = [
-  makeRecord({ id: 1, serial_number: 'SN-XXXX-000001' }),
-  makeRecord({ id: 2, serial_number: 'SN-XXXX-000002' }),
+  makeRecord({ id: '1', serial_number: 'SN-XXXX-000001' }),
+  makeRecord({ id: '2', serial_number: 'SN-XXXX-000002' }),
 ];
 
 describe('DetailTable', () => {
@@ -49,14 +49,14 @@ describe('DetailTable', () => {
 
   it('shows PASS result', () => {
     render(
-      <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
+      <DetailTable rows={[makeRecord({ id: '1', serial_number: 'SN-001' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
     );
     expect(screen.getByText('pass')).toBeInTheDocument();
   });
 
   it('shows FAIL result', () => {
     render(
-      <DetailTable rows={[makeRecord({ id: 1, serial_number: 'SN-001', result: 'fail' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
+      <DetailTable rows={[makeRecord({ id: '1', serial_number: 'SN-001', result: 'fail' })]} page={1} pageSize={10} onPageChange={jest.fn()} title="Test" />
     );
     expect(screen.getByText('fail')).toBeInTheDocument();
   });
@@ -65,7 +65,7 @@ describe('DetailTable', () => {
     const onFixtureClick = jest.fn();
     render(
       <DetailTable
-        rows={[makeRecord({ id: 1, serial_number: 'SN-001', fixture_id: 'fixture-42' })]}
+        rows={[makeRecord({ id: '1', serial_number: 'SN-001', fixture_id: 'fixture-42' })]}
         page={1}
         pageSize={10}
         onPageChange={jest.fn()}
@@ -82,7 +82,7 @@ describe('DetailTable', () => {
     const onSnClick = jest.fn();
     render(
       <DetailTable
-        rows={[makeRecord({ id: 1, serial_number: 'SN-999' })]}
+        rows={[makeRecord({ id: '1', serial_number: 'SN-999' })]}
         page={1}
         pageSize={10}
         onPageChange={jest.fn()}
@@ -99,7 +99,7 @@ describe('DetailTable', () => {
     const onTesterClick = jest.fn();
     render(
       <DetailTable
-        rows={[makeRecord({ id: 1, serial_number: 'SN-001', tester: 'tester-99' })]}
+        rows={[makeRecord({ id: '1', serial_number: 'SN-001', tester: 'tester-99' })]}
         page={1}
         pageSize={10}
         onPageChange={jest.fn()}
@@ -115,7 +115,7 @@ describe('DetailTable', () => {
   it('renders fixture as plain text when onFixtureClick is not provided', () => {
     render(
       <DetailTable
-        rows={[makeRecord({ id: 1, serial_number: 'SN-001', fixture_id: 'fixture-plain' })]}
+        rows={[makeRecord({ id: '1', serial_number: 'SN-001', fixture_id: 'fixture-plain' })]}
         page={1}
         pageSize={10}
         onPageChange={jest.fn()}
@@ -129,7 +129,7 @@ describe('DetailTable', () => {
 
   it('shows error locations for failed board', () => {
     const row = makeRecord({
-      id: 1,
+      id: '1',
       serial_number: 'SN-001',
       result: 'fail',
       error_locations: ['c01'],
@@ -153,18 +153,18 @@ describe('DetailTable', () => {
       threshold_raw: null,
     });
     const row = makeRecord({
-      id: 42,
+      id: '42',
       serial_number: 'SN-005',
       result: 'fail',
       error_locations: ['e01', 'e02', 'e03', 'e04', 'e05'],
       test_errors: [],
     });
 
-    // Mock fetch for on-demand error loading
+    // Mock fetch for on-demand error loading (new /api/tests/:id/errors shape)
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
-        errors: { '42': ['e01', 'e02', 'e03', 'e04', 'e05'].map(makeError) },
+        errors: ['e01', 'e02', 'e03', 'e04', 'e05'].map(makeError),
       }),
     });
 
@@ -247,7 +247,7 @@ describe('DetailTable', () => {
 
   it('U7: rows with 3 or fewer errors show all locations and have expand icon', () => {
     const row = makeRecord({
-      id: 43,
+      id: '43',
       serial_number: 'SN-006',
       result: 'fail',
       error_locations: ['f01', 'f02', 'f03'],
@@ -264,7 +264,7 @@ describe('DetailTable', () => {
       // rows has 1 item but totalRows says 100 — pagination should show 10 pages (pageSize=10)
       render(
         <DetailTable
-          rows={[makeRecord({ id: 1, serial_number: 'SN-001' })]}
+          rows={[makeRecord({ id: '1', serial_number: 'SN-001' })]}
           page={1}
           pageSize={10}
           totalRows={100}
@@ -281,8 +281,8 @@ describe('DetailTable', () => {
       render(
         <DetailTable
           rows={[
-            makeRecord({ id: 1, serial_number: 'SN-001' }),
-            makeRecord({ id: 2, serial_number: 'SN-002' }),
+            makeRecord({ id: '1', serial_number: 'SN-001' }),
+            makeRecord({ id: '2', serial_number: 'SN-002' }),
           ]}
           page={1}
           pageSize={1}
