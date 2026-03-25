@@ -98,7 +98,7 @@ export default function HomePage() {
   const loadSummary = useCallback(async (
     start: string,
     end: string,
-    filters: { product?: string; fixture?: string; sn?: string; tester?: string },
+    filters: { product?: string; fixture?: string; tester?: string },
   ) => {
     if (!start || !end) return;
     const myId = ++summaryLoadIdRef.current;
@@ -106,7 +106,6 @@ export default function HomePage() {
     const params = new URLSearchParams({ start, end });
     if (filters.product) params.set('product', filters.product);
     if (filters.fixture) params.set('fixture', filters.fixture);
-    if (filters.sn)      params.set('sn',      filters.sn);
     if (filters.tester)  params.set('tester',  filters.tester);
 
     const headers: Record<string, string> = {};
@@ -254,13 +253,13 @@ export default function HomePage() {
   // Main data loading effects
   // ---------------------------------------------------------------------------
 
-  // Summary effect: triggered by structural filters (date range + product/fixture/sn/tester).
+  // Summary effect: triggered by structural filters (date range + product/fixture/tester).
   // Also resets page to 1 so the table effect fires with page=1.
   useEffect(() => {
     if (!startDate || !endDate) return;
-    void loadSummary(startDate, endDate, { product, fixture, sn, tester });
+    void loadSummary(startDate, endDate, { product, fixture, tester });
     setPage(1);
-  }, [startDate, endDate, product, fixture, sn, tester, loadSummary]);
+  }, [startDate, endDate, product, fixture, tester, loadSummary]);
 
   // Table effect: triggered by all structural filters + pagination/text/error/result filters.
   useEffect(() => {
@@ -494,7 +493,7 @@ export default function HomePage() {
 
   function handleReload() {
     if (!startDate || !endDate) return;
-    void loadSummary(startDate, endDate, { product, fixture, sn, tester });
+    void loadSummary(startDate, endDate, { product, fixture, tester });
     // Mirror the table effect logic: narrow range when a chart slice is selected
     const effectiveStart = selectedDate && metric !== 'utilization' ? selectedDate : startDate;
     const effectiveEnd   = selectedDate && metric !== 'utilization' ? selectedDate : endDate;

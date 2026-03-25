@@ -8,13 +8,33 @@
 import { NextRequest } from 'next/server';
 
 // ---------------------------------------------------------------------------
-// Supabase mock — service-role client uses .rpc(), anon-key uses auth.getUser()
+// Supabase mock — service-role client queries MVs, anon-key uses auth.getUser()
 // ---------------------------------------------------------------------------
-
-const mockRpc = jest.fn();
 
 // Mock for auth.getUser() on the anon-key client (JWT validation)
 const mockGetUser = jest.fn();
+
+// Chainable query builder mock for service-role client MV queries
+function createQueryMock(resolvedValue: { data: any; error: any }) {
+  const chain: any = {};
+  const methods = ['select', 'gte', 'lte', 'eq'];
+  for (const m of methods) {
+    chain[m] = jest.fn().mockReturnValue(chain);
+  }
+  // Make the chain thenable so Promise.all works
+  chain.then = (resolve: any, reject: any) =>
+    Promise.resolve(resolvedValue).then(resolve, reject);
+  return chain;
+}
+
+let mvSummaryResult = { data: [] as any[], error: null as any };
+let mvErrorResult = { data: [] as any[], error: null as any };
+
+const mockFrom = jest.fn((table: string) => {
+  if (table === 'mv_summary_by_day') return createQueryMock(mvSummaryResult);
+  if (table === 'mv_error_counts_by_day') return createQueryMock(mvErrorResult);
+  return createQueryMock({ data: [], error: null });
+});
 
 jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn((_url: string, key: string) => {
@@ -22,8 +42,8 @@ jest.mock('@supabase/supabase-js', () => ({
     if (key !== 'test-service-key') {
       return { auth: { getUser: mockGetUser } };
     }
-    // Service-role client — uses .rpc() for aggregated queries
-    return { rpc: mockRpc };
+    // Service-role client — queries materialized views
+    return { from: mockFrom };
   }),
 }));
 
@@ -109,8 +129,9 @@ beforeAll(() => {
 describe('GET /api/summary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: RPC calls return empty arrays
-    mockRpc.mockResolvedValue({ data: [], error: null });
+    // Default: MV queries return empty arrays
+    mvSummaryResult = { data: [], error: null };
+    mvErrorResult = { data: [], error: null };
     // Default: valid user
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null });
   });
@@ -214,47 +235,25 @@ describe('GET /api/summary', () => {
       expect(body.error).toMatch(/invalid|expired/i);
     });
 
-    it('calls both RPC functions with correct parameters', async () => {
-      mockRpc.mockResolvedValue({ data: [], error: null });
-
+    it('queries both MVs via from()', async () => {
       const req = makeRequest(
         { start: '2026-03-22', end: '2026-03-24', fixture: 'fix-01', product: 'Product Alpha' },
         { authorization: 'Bearer test-jwt' },
       );
       await GET(req);
 
-      expect(mockRpc).toHaveBeenCalledTimes(2);
-      expect(mockRpc).toHaveBeenCalledWith('summary_by_day_fixture_tester', {
-        p_start: '2026-03-22T00:00:00Z',
-        p_end: '2026-03-24T23:59:59Z',
-        p_fixture: 'fix-01',
-        p_tester: null,
-        p_sn: null,
-        p_product: 'Product Alpha',
-      });
-      expect(mockRpc).toHaveBeenCalledWith('error_counts_by_day_location', {
-        p_start: '2026-03-22T00:00:00Z',
-        p_end: '2026-03-24T23:59:59Z',
-        p_fixture: 'fix-01',
-        p_tester: null,
-        p_sn: null,
-        p_product: 'Product Alpha',
-      });
+      expect(mockFrom).toHaveBeenCalledWith('mv_summary_by_day');
+      expect(mockFrom).toHaveBeenCalledWith('mv_error_counts_by_day');
     });
 
-    it('aggregates byDayFixtureTester from RPC result', async () => {
-      mockRpc.mockImplementation((fn: string) => {
-        if (fn === 'summary_by_day_fixture_tester') {
-          return Promise.resolve({
-            data: [
-              { day: '2026-03-22', fixture_id: 'fix-01', tester: 'tester-01', operator_id: 'op-01', total: 2, pass: 1, fail: 1, unique_boards: 2 },
-              { day: '2026-03-23', fixture_id: 'fix-02', tester: 'tester-02', operator_id: 'op-02', total: 1, pass: 1, fail: 0, unique_boards: 1 },
-            ],
-            error: null,
-          });
-        }
-        return Promise.resolve({ data: [], error: null });
-      });
+    it('aggregates byDayFixtureTester from MV result', async () => {
+      mvSummaryResult = {
+        data: [
+          { day: '2026-03-22', fixture_id: 'fix-01', tester: 'tester-01', operator_id: 'op-01', total: 2, pass: 1, fail: 1, unique_boards: 2 },
+          { day: '2026-03-23', fixture_id: 'fix-02', tester: 'tester-02', operator_id: 'op-02', total: 1, pass: 1, fail: 0, unique_boards: 1 },
+        ],
+        error: null,
+      };
 
       const req = makeRequest(
         { start: '2026-03-22', end: '2026-03-24' },
@@ -273,16 +272,11 @@ describe('GET /api/summary', () => {
       expect(fix01Row?.fail).toBe(1);
     });
 
-    it('returns errorsByDayLocation from RPC result', async () => {
-      mockRpc.mockImplementation((fn: string) => {
-        if (fn === 'error_counts_by_day_location') {
-          return Promise.resolve({
-            data: [{ day: '2026-03-22', location: 'resistor-R10', error_count: 2 }],
-            error: null,
-          });
-        }
-        return Promise.resolve({ data: [], error: null });
-      });
+    it('returns errorsByDayLocation from MV result', async () => {
+      mvErrorResult = {
+        data: [{ day: '2026-03-22', location: 'resistor-R10', error_count: 2 }],
+        error: null,
+      };
 
       const req = makeRequest(
         { start: '2026-03-22', end: '2026-03-24' },
@@ -296,13 +290,8 @@ describe('GET /api/summary', () => {
       expect(body.errorsByDayLocation[0].error_count).toBe(2);
     });
 
-    it('returns 500 when summary RPC fails', async () => {
-      mockRpc.mockImplementation((fn: string) => {
-        if (fn === 'summary_by_day_fixture_tester') {
-          return Promise.resolve({ data: null, error: { message: 'DB error' } });
-        }
-        return Promise.resolve({ data: [], error: null });
-      });
+    it('returns 500 when summary MV query fails', async () => {
+      mvSummaryResult = { data: null, error: { message: 'DB error' } };
 
       const req = makeRequest(
         { start: '2026-03-22', end: '2026-03-24' },
@@ -312,13 +301,8 @@ describe('GET /api/summary', () => {
       expect(res.status).toBe(500);
     });
 
-    it('returns 500 when error counts RPC fails', async () => {
-      mockRpc.mockImplementation((fn: string) => {
-        if (fn === 'error_counts_by_day_location') {
-          return Promise.resolve({ data: null, error: { message: 'RPC error' } });
-        }
-        return Promise.resolve({ data: [], error: null });
-      });
+    it('returns 500 when error counts MV query fails', async () => {
+      mvErrorResult = { data: null, error: { message: 'MV error' } };
 
       const req = makeRequest(
         { start: '2026-03-22', end: '2026-03-24' },

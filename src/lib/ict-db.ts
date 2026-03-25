@@ -118,3 +118,13 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
   );
   if (errErr) throw new Error(`test_errors insert failed: ${errErr.message}`);
 }
+
+/**
+ * Refresh materialized views used by /api/summary.
+ * Call after a batch of upserts to keep aggregated data current.
+ */
+export async function refreshMaterializedViews(): Promise<void> {
+  const sb = getClient();
+  const { error } = await sb.rpc('refresh_mv_summary');
+  if (error) throw new Error(`MV refresh failed: ${error.message}`);
+}

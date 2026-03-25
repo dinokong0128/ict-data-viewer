@@ -1,14 +1,14 @@
 /**
- * GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD[&product=...&fixture=...&sn=...&tester=...]
+ * GET /api/summary?start=YYYY-MM-DD&end=YYYY-MM-DD[&product=...&fixture=...&tester=...]
  *
  * Returns pre-aggregated summary data for the dashboard chart and summary panel.
- * Two tiers (both filtered by optional params):
- *   byDayFixtureTester  — calls summary_by_day_fixture_tester() RPC (server-side GROUP BY)
- *   errorsByDayLocation — calls error_counts_by_day_location() RPC (server-side GROUP BY)
+ * Two materialized views (both filterable by product/fixture/tester):
+ *   byDayFixtureTester  — reads mv_summary_by_day
+ *   errorsByDayLocation — reads mv_error_counts_by_day
  *
  * Data routing:
  *   - Authenticated request (Authorization: Bearer <jwt>):
- *       Queries Supabase using the service role key for server-side aggregation.
+ *       Queries Supabase materialized views using the service role key.
  *   - Guest request (no Authorization header):
  *       Computes in-memory from src/fixtures/guest-data.json.
  */
@@ -43,7 +43,6 @@ function getSupabaseServiceClient() {
 type SummaryFilters = {
   product?: string;
   fixture?: string;
-  sn?: string;
   tester?: string;
 };
 
@@ -53,26 +52,27 @@ async function fetchSummaryFromSupabase(
   filters: SummaryFilters,
 ): Promise<SummaryResponse> {
   const sb = getSupabaseServiceClient();
-  const startTs = start + 'T00:00:00Z';
-  const endTs = end + 'T23:59:59Z';
 
-  const rpcParams = {
-    p_start: startTs,
-    p_end: endTs,
-    p_fixture: filters.fixture ?? null,
-    p_tester: filters.tester ?? null,
-    p_sn: filters.sn ?? null,
-    p_product: filters.product ?? null,
-  };
+  // Query A — mv_summary_by_day (pre-aggregated by day/fixture/tester/operator/product)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let qA: any = sb.from('mv_summary_by_day').select('*')
+    .gte('day', start).lte('day', end);
+  if (filters.fixture) qA = qA.eq('fixture_id', filters.fixture);
+  if (filters.tester)  qA = qA.eq('tester', filters.tester);
+  if (filters.product) qA = qA.eq('product_name', filters.product);
 
-  // Both queries use server-side GROUP BY — no row-count limits.
-  const [resultA, resultB] = await Promise.all([
-    sb.rpc('summary_by_day_fixture_tester', rpcParams),
-    sb.rpc('error_counts_by_day_location', rpcParams),
-  ]);
+  // Query B — mv_error_counts_by_day (pre-aggregated by day/location/fixture/tester/product)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let qB: any = sb.from('mv_error_counts_by_day').select('*')
+    .gte('day', start).lte('day', end);
+  if (filters.fixture) qB = qB.eq('fixture_id', filters.fixture);
+  if (filters.tester)  qB = qB.eq('tester', filters.tester);
+  if (filters.product) qB = qB.eq('product_name', filters.product);
 
-  if (resultA.error) throw new Error(`Summary RPC failed: ${resultA.error.message}`);
-  if (resultB.error) throw new Error(`Error counts RPC failed: ${resultB.error.message}`);
+  const [resultA, resultB] = await Promise.all([qA, qB]);
+
+  if (resultA.error) throw new Error(`Summary query failed: ${resultA.error.message}`);
+  if (resultB.error) throw new Error(`Error counts query failed: ${resultB.error.message}`);
 
   const byDayFixtureTester: SummaryRow[] = (resultA.data ?? []).map((r: any) => ({
     day: typeof r.day === 'string' ? r.day : new Date(r.day).toISOString().slice(0, 10),
@@ -151,7 +151,6 @@ function fetchSummaryFromFixture(
     // Apply optional filters
     if (filters.fixture && test.fixture_id !== filters.fixture) continue;
     if (filters.tester  && test.tester      !== filters.tester)  continue;
-    if (filters.sn      && test.board_id    !== filters.sn)       continue;
     if (filters.product && product?.product_name !== filters.product) continue;
 
     const day = new Date(shiftedMs).toISOString().slice(0, 10);
@@ -186,7 +185,6 @@ function fetchSummaryFromFixture(
     // Apply same filters as byDayFixtureTester
     if (filters.fixture && test.fixture_id !== filters.fixture) continue;
     if (filters.tester  && test.tester      !== filters.tester)  continue;
-    if (filters.sn      && test.board_id    !== filters.sn)       continue;
     if (filters.product && product?.product_name !== filters.product) continue;
 
     matchingTestIds.add(test.id);
@@ -238,7 +236,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const filters: SummaryFilters = {
     product: searchParams.get('product') ?? undefined,
     fixture: searchParams.get('fixture') ?? undefined,
-    sn:      searchParams.get('sn')      ?? undefined,
     tester:  searchParams.get('tester')  ?? undefined,
   };
 
