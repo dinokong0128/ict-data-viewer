@@ -16,6 +16,9 @@ type DetailTableProps = {
   textFilter?: string;
   onTextFilterChange?: (value: string) => void;
   authToken?: string;
+  /** When provided, drives pagination from the server-reported total instead of rows.length.
+   *  rows is assumed to already be the current page (no client-side slicing). */
+  totalRows?: number;
 };
 
 const COLLAPSED_COUNT = 3;
@@ -141,14 +144,15 @@ export function DetailTable({
   textFilter,
   onTextFilterChange,
   authToken,
+  totalRows,
 }: DetailTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [fetchedErrors, setFetchedErrors] = useState<Map<number, TestErrorRecord[]>>(new Map());
   const [loadingRows, setLoadingRows] = useState<Set<number>>(new Set());
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil((totalRows ?? rows.length) / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const start = (currentPage - 1) * pageSize;
-  const pageRows = rows.slice(start, start + pageSize);
+  // When totalRows is provided, rows is already the current page — no slicing needed
+  const pageRows = totalRows != null ? rows : rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const toggleRow = useCallback((id: number, row: TestRecord) => {
     setExpandedRows((prev) => {

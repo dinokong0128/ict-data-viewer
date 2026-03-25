@@ -258,4 +258,54 @@ describe('DetailTable', () => {
     expect(screen.getByText('f01, f02, f03')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Expand errors' })).toBeInTheDocument();
   });
+
+  describe('totalRows prop — server-driven pagination', () => {
+    it('uses totalRows to compute totalPages when provided instead of rows.length', () => {
+      // rows has 1 item but totalRows says 100 — pagination should show 10 pages (pageSize=10)
+      render(
+        <DetailTable
+          rows={[makeRecord({ id: 1, serial_number: 'SN-001' })]}
+          page={1}
+          pageSize={10}
+          totalRows={100}
+          onPageChange={jest.fn()}
+          title="Test"
+        />,
+      );
+      expect(screen.getByText('Page 1 of 10')).toBeInTheDocument();
+      // The single provided row should be rendered (no slicing when totalRows is provided)
+      expect(screen.getByText('SN-001')).toBeInTheDocument();
+    });
+
+    it('falls back to rows.length for pagination when totalRows is not provided', () => {
+      render(
+        <DetailTable
+          rows={[
+            makeRecord({ id: 1, serial_number: 'SN-001' }),
+            makeRecord({ id: 2, serial_number: 'SN-002' }),
+          ]}
+          page={1}
+          pageSize={1}
+          onPageChange={jest.fn()}
+          title="Test"
+        />,
+      );
+      // 2 rows at pageSize=1 → 2 pages
+      expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+    });
+
+    it('shows page 1 of 1 when totalRows is 0', () => {
+      render(
+        <DetailTable
+          rows={[]}
+          page={1}
+          pageSize={10}
+          totalRows={0}
+          onPageChange={jest.fn()}
+          title="Test"
+        />,
+      );
+      expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
+    });
+  });
 });
