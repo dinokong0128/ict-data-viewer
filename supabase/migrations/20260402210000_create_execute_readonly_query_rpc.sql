@@ -28,12 +28,12 @@ BEGIN
   END IF;
 
   -- Block dangerous keywords that could appear inside a SELECT/WITH
-  IF normalized ~ '\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|EXECUTE|DO)\b' THEN
+  IF normalized ~ '(?<![a-zA-Z0-9_])(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|GRANT|REVOKE|COPY|EXECUTE|DO)(?![a-zA-Z0-9_])' THEN
     RAISE EXCEPTION 'Query contains disallowed keyword';
   END IF;
 
   -- Block function calls that could mutate state
-  IF normalized ~ '\b(PG_SLEEP|SET_CONFIG|DBLINK|LO_IMPORT|LO_EXPORT|PG_READ_FILE|PG_WRITE_FILE)\b' THEN
+  IF normalized ~ '(?<![a-zA-Z0-9_])(PG_SLEEP|SET_CONFIG|DBLINK|LO_IMPORT|LO_EXPORT|PG_READ_FILE|PG_WRITE_FILE)(?![a-zA-Z0-9_])' THEN
     RAISE EXCEPTION 'Query contains disallowed function call';
   END IF;
 
@@ -47,8 +47,6 @@ $$;
 
 -- Grant execute to authenticated users (chat is role-gated in the app layer)
 GRANT EXECUTE ON FUNCTION public.execute_readonly_query(text) TO authenticated;
--- Also grant to anon in case the endpoint uses the anon key
-GRANT EXECUTE ON FUNCTION public.execute_readonly_query(text) TO anon;
 
 COMMENT ON FUNCTION public.execute_readonly_query(text) IS
   'AI chat (F1): executes a validated read-only SQL query and returns results as JSON. Blocks DML/DDL.';
