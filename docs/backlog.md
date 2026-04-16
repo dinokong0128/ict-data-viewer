@@ -1,6 +1,6 @@
 # ICT Data Viewer — Project Backlog
 
-> Last updated: 2026-03-18
+> Last updated: 2026-04-16
 > Stack: Next.js (App Router), React, TypeScript, Supabase, Vercel
 > Repo: https://github.com/dinokong0128/ict-data-viewer (branch: `develop`)
 
@@ -25,6 +25,48 @@
 
 ## 🐛 Bugs
 
+B3 — SI-suffix numeric values not parsed (paste below B2)
+markdown### B3 — SI-suffix numeric values not parsed into `*_value` columns
+**Problem:** The parser correctly captures raw strings like `"214.33p"`, `"1.0434M"`, `"5.0000k"` into `*_raw` columns but fails to parse them into the numeric `*_value` columns. `measured_value`, `high_limit_value`, `low_limit_value`, and `threshold_value` end up NULL for any value with an SI suffix.
+
+**Scale:** 246,127 rows affected (35.8% of `test_errors`) — 134,714 with case-sensitive suffixes (`M`, `Meg`), 111,413 with lowercase (`p`/`n`/`u`/`m`/`k`/`g`/`f`). Every numeric comparison against limits — anomaly detection, suspect-pass classification, range summary deltas — is silently broken for these rows.
+
+**Required behavior:**
+- Parser handles all SI suffixes: `f` (1e-15), `p` (1e-12), `n` (1e-9), `u` (1e-6), `m` (1e-3), `k` (1e3), `M` / `Meg` (1e6), `g` / `G` (1e9)
+- **Case-sensitive** for `m` vs `M` — critical, they differ by a factor of 1e9
+- Negative values supported (`-1.0434M`, `-117.21k`)
+- Graceful null return on garbage (`"0.-inf"`, `"Part# ..."`, `"Threshold: ..."`, empty strings)
+- Backfill migration to populate existing NULL `*_value` rows using the same logic
+- Comprehensive unit tests (TDD — tests first)
+
+**Effort:** Small-Medium
+**Approach:** Two PRs — (1) parser fix + tests, (2) backfill migration (reviewed and applied manually via Supabase MCP).
+**Blocks:** Any future work that relies on numeric comparison of readings to limits — anomaly detection, false-positive classification, enhanced range summary.
+
+B4 — Field-alignment misparse in some error blocks (paste below B3)
+markdown### B4 — Field-alignment misparse: `Threshold:` text bleeding into `measured_raw`
+**Problem:** In certain error block shapes, the parser's field alignment fails and non-numeric text ends up in the wrong column. Observed cases in production data:
+- `"Threshold: 300.00"`, `"Threshold: 100.00"`, `"Threshold: 5.0000k"` etc. appearing in `measured_raw` (44 occurrences)
+- `"Part# 7012068"`, `"Part# 7336193"` appearing in `measured_raw` (6 occurrences)
+- `"Too many attempts to discharge device"` in `measured_raw` (1 occurrence)
+
+**Scale:** ~51 rows across the DB — small, but indicates the parser is mis-reading block structure in edge cases. Note that B1 was an earlier, related fix for the `Threshold:` issue; this is a residual leak that made it through.
+
+**Required behavior:**
+- Identify which block shapes / error types trigger the misalignment (inspect `raw_block` for affected rows — see query below)
+- Fix the parser's line-to-field mapping to correctly handle these shapes
+- Add regression tests with the actual failing raw blocks as fixtures
+
+**Diagnostic query:**
+```sql
+SELECT raw_block, measured_raw, high_limit_raw, low_limit_raw
+FROM test_errors
+WHERE measured_raw ~ '^(Threshold:|Part#|Too many)'
+LIMIT 10;
+```
+
+**Effort:** Small (after the misaligned cases are identified)
+**Notes:** Low priority at 51 rows, but worth doing after
 ---
 
 ## ✨ UI / UX Improvements
@@ -89,4 +131,7 @@
 4. ~~**U6** — Detail table text filter. Extends I1/U3/U4 filter state.~~ ✅ Done
 5. ~~**U5, U7** — Self-contained UI improvements, do in any order.~~ ✅ Done
 6. ~~**F1** — AI chat. Highest payoff, all prerequisites in place by this point.~~ ✅ Done
-7. **F2** — When a sample log file is available.
+8. **B3** — SI-suffix parser fix + backfill. Unblocks any feature doing numeric comparison. Small PRs, high payoff.
+9. **B4** — Field-alignment misparse cleanup. Low priority, do after B3.
+10. **F2** — When a sample log file is available.
+
