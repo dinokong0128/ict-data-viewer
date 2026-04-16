@@ -101,19 +101,22 @@ export async function upsertTest(parsed: ParsedTest): Promise<void> {
 
   const { error: errErr } = await sb.from('test_errors').insert(
     parsed.errors.map((e) => ({
-      test_id:        testId,
-      error_type:     e.error_type,
-      location:       e.location,
-      subtest:        e.subtest,
-      part_spec:      e.part_spec,
-      unit:           e.unit,
-      measured_raw:   e.measured_raw,
-      nominal_raw:    e.nominal_raw,
-      high_limit_raw: e.high_limit_raw,
-      low_limit_raw:  e.low_limit_raw,
-      threshold_raw:   e.threshold_raw,
-      threshold_value: e.threshold_value,
-      raw_block:       e.raw_block,
+      test_id:          testId,
+      error_type:       e.error_type,
+      location:         e.location,
+      subtest:          e.subtest,
+      part_spec:        e.part_spec,
+      unit:             e.unit,
+      measured_raw:     e.measured_raw,
+      measured_value:   e.measured_value,
+      nominal_raw:      e.nominal_raw,
+      high_limit_raw:   e.high_limit_raw,
+      high_limit_value: e.high_limit_value,
+      low_limit_raw:    e.low_limit_raw,
+      low_limit_value:  e.low_limit_value,
+      threshold_raw:    e.threshold_raw,
+      threshold_value:  e.threshold_value,
+      raw_block:        e.raw_block,
     }))
   );
   if (errErr) throw new Error(`test_errors insert failed: ${errErr.message}`);
