@@ -505,20 +505,139 @@ describe('parseLog — B1: threshold_value + Subtest: scan fix', () => {
 });
 
 // ---------------------------------------------------------------------------
-// parseUnitValue — unit suffix conversion
+// parseSiNumeric — SI-suffixed numeric parsing (B3)
 // ---------------------------------------------------------------------------
-import { parseUnitValue } from '@/lib/ict-parser';
+import { parseSiNumeric } from '@/lib/ict-parser';
 
-describe('parseUnitValue', () => {
-  it('returns null for null input', () => expect(parseUnitValue(null)).toBeNull());
-  it('returns null for empty string', () => expect(parseUnitValue('')).toBeNull());
-  it('parses plain float', () => expect(parseUnitValue('17.500')).toBeCloseTo(17.5));
-  it('parses u suffix (micro)', () => expect(parseUnitValue('0.78327u')).toBeCloseTo(0.78327e-6));
-  it('parses p suffix (pico)', () => expect(parseUnitValue('233.26p')).toBeCloseTo(233.26e-12));
-  it('parses k suffix (kilo)', () => expect(parseUnitValue('20.000k')).toBeCloseTo(20000));
-  it('parses M suffix (mega)', () => expect(parseUnitValue('1.5612M')).toBeCloseTo(1561200));
-  it('parses m suffix (milli)', () => expect(parseUnitValue('5.000m')).toBeCloseTo(0.005));
-  it('parses n suffix (nano)', () => expect(parseUnitValue('10.000n')).toBeCloseTo(10e-9));
+describe('parseSiNumeric — null / empty / undefined', () => {
+  it('returns null for null', () => expect(parseSiNumeric(null)).toBeNull());
+  it('returns null for undefined', () => expect(parseSiNumeric(undefined)).toBeNull());
+  it('returns null for empty string', () => expect(parseSiNumeric('')).toBeNull());
+  it('returns null for whitespace-only string', () => expect(parseSiNumeric('   ')).toBeNull());
+});
+
+describe('parseSiNumeric — plain integers and decimals', () => {
+  it('parses "0"', () => expect(parseSiNumeric('0')).toBe(0));
+  it('parses "42"', () => expect(parseSiNumeric('42')).toBe(42));
+  it('parses "-17"', () => expect(parseSiNumeric('-17')).toBe(-17));
+  it('parses "3.14"', () => expect(parseSiNumeric('3.14')).toBeCloseTo(3.14));
+  it('parses "-0.001"', () => expect(parseSiNumeric('-0.001')).toBeCloseTo(-0.001));
+  it('parses "12.135"', () => expect(parseSiNumeric('12.135')).toBeCloseTo(12.135));
+  it('parses "17.500"', () => expect(parseSiNumeric('17.500')).toBeCloseTo(17.5));
+});
+
+describe('parseSiNumeric — scientific notation', () => {
+  it('parses "1.5e3"', () => expect(parseSiNumeric('1.5e3')).toBeCloseTo(1500));
+  it('parses "-2.4e-6"', () => expect(parseSiNumeric('-2.4e-6')).toBeCloseTo(-2.4e-6));
+  it('parses "1E3"', () => expect(parseSiNumeric('1E3')).toBeCloseTo(1000));
+});
+
+describe('parseSiNumeric — SI suffixes (positive)', () => {
+  it('parses "4.7f" (femto)', () => expect(parseSiNumeric('4.7f')).toBeCloseTo(4.7e-15));
+  it('parses "214.33p" (pico)', () => expect(parseSiNumeric('214.33p')).toBeCloseTo(2.1433e-10));
+  it('parses "10.000n" (nano)', () => expect(parseSiNumeric('10.000n')).toBeCloseTo(10e-9));
+  it('parses "0.78327u" (micro)', () => expect(parseSiNumeric('0.78327u')).toBeCloseTo(0.78327e-6));
+  it('parses "4.7m" (milli)', () => expect(parseSiNumeric('4.7m')).toBeCloseTo(0.0047));
+  it('parses "5.0000k" (kilo)', () => expect(parseSiNumeric('5.0000k')).toBeCloseTo(5000));
+  it('parses "4.7M" (mega)', () => expect(parseSiNumeric('4.7M')).toBeCloseTo(4_700_000));
+  it('parses "2.5Meg" (mega, alt spelling)', () => expect(parseSiNumeric('2.5Meg')).toBeCloseTo(2_500_000));
+  it('parses "1.0434M" (real-world mega)', () => expect(parseSiNumeric('1.0434M')).toBeCloseTo(1_043_400));
+  it('parses "1.5612M" (real-world mega)', () => expect(parseSiNumeric('1.5612M')).toBeCloseTo(1_561_200));
+  it('parses "3g" (giga, lowercase)', () => expect(parseSiNumeric('3g')).toBeCloseTo(3e9));
+  it('parses "3G" (giga, uppercase)', () => expect(parseSiNumeric('3G')).toBeCloseTo(3e9));
+});
+
+describe('parseSiNumeric — SI suffixes (negative)', () => {
+  it('parses "-1.0434M"', () => expect(parseSiNumeric('-1.0434M')).toBeCloseTo(-1_043_400));
+  it('parses "-117.21k"', () => expect(parseSiNumeric('-117.21k')).toBeCloseTo(-117_210));
+  it('parses "-137360u"', () => expect(parseSiNumeric('-137360u')).toBeCloseTo(-0.13736));
+  it('parses "-4.7m"', () => expect(parseSiNumeric('-4.7m')).toBeCloseTo(-0.0047));
+  it('parses "-2.5Meg"', () => expect(parseSiNumeric('-2.5Meg')).toBeCloseTo(-2_500_000));
+});
+
+describe('parseSiNumeric — case sensitivity (M vs m)', () => {
+  // The single most important correctness rule: M (mega, 1e6) must NOT be
+  // confused with m (milli, 1e-3). A case-insensitive match would misparse
+  // "1.0434M" as 0.0010434 — off by a factor of 1e9.
+  it('"4.7m" is milli (0.0047), not mega', () => {
+    expect(parseSiNumeric('4.7m')).toBeCloseTo(0.0047);
+    expect(parseSiNumeric('4.7m')).not.toBeCloseTo(4_700_000);
+  });
+  it('"4.7M" is mega (4_700_000), not milli', () => {
+    expect(parseSiNumeric('4.7M')).toBeCloseTo(4_700_000);
+    expect(parseSiNumeric('4.7M')).not.toBeCloseTo(0.0047);
+  });
+  it('"Meg" suffix is mega, "meg" is not recognised', () => {
+    expect(parseSiNumeric('2.5Meg')).toBeCloseTo(2_500_000);
+    expect(parseSiNumeric('2.5meg')).toBeNull();
+    expect(parseSiNumeric('2.5MEG')).toBeNull();
+  });
+});
+
+describe('parseSiNumeric — whitespace handling', () => {
+  it('trims leading whitespace', () => expect(parseSiNumeric('  214.33p')).toBeCloseTo(2.1433e-10));
+  it('trims trailing whitespace', () => expect(parseSiNumeric('214.33p  ')).toBeCloseTo(2.1433e-10));
+  it('trims both sides', () => expect(parseSiNumeric('  1.0434M  ')).toBeCloseTo(1_043_400));
+});
+
+describe('parseSiNumeric — garbage and malformed input', () => {
+  it('returns null for "0.-inf"', () => expect(parseSiNumeric('0.-inf')).toBeNull());
+  it('returns null for "Part# 7012068"', () => expect(parseSiNumeric('Part# 7012068')).toBeNull());
+  it('returns null for "Threshold: 300.00"', () => expect(parseSiNumeric('Threshold: 300.00')).toBeNull());
+  it('returns null for "Too many attempts to discharge device"', () =>
+    expect(parseSiNumeric('Too many attempts to discharge device')).toBeNull());
+  it('returns null for "abc"', () => expect(parseSiNumeric('abc')).toBeNull());
+  it('returns null for "12.3xyz"', () => expect(parseSiNumeric('12.3xyz')).toBeNull());
+  it('returns null for malformed number "1.2.3"', () => expect(parseSiNumeric('1.2.3')).toBeNull());
+  it('returns null for lone sign "-"', () => expect(parseSiNumeric('-')).toBeNull());
+  it('returns null for suffix-only "k"', () => expect(parseSiNumeric('k')).toBeNull());
+  it('returns null for double suffix "1.5kM"', () => expect(parseSiNumeric('1.5kM')).toBeNull());
+  it('never returns NaN', () => {
+    for (const v of ['abc', '0.-inf', 'NaN', 'Infinity', '12.3xyz']) {
+      const result = parseSiNumeric(v);
+      expect(result === null || Number.isFinite(result)).toBe(true);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseLog — B3 fix: *_value columns populated for SI-suffixed raw values
+// ---------------------------------------------------------------------------
+describe('parseLog — B3: *_value fields populated from SI-suffixed raw', () => {
+  it('measured_value parsed from "u" suffix — c01 in SN-000001', () => {
+    const r = parseLog('PROD-001_SN-XXXX-000001.log', log000001);
+    const c01 = r.errors.find((e) => e.location === 'c01')!;
+    expect(c01.measured_raw).toBe('0.78327u');
+    expect(c01.measured_value).toBeCloseTo(0.78327e-6);
+  });
+
+  it('measured_value parsed from "p" suffix — c03 in SN-000004', () => {
+    const r = parseLog('PROD-001_SN-XXXX-000004.log', log000004);
+    const c03 = r.errors.find((e) => e.location === 'c03')!;
+    expect(c03.measured_raw).toBe('233.26p');
+    expect(c03.measured_value).toBeCloseTo(233.26e-12);
+  });
+
+  it('measured_value parsed from "M" suffix — r08 in SN-000004', () => {
+    const r = parseLog('PROD-001_SN-XXXX-000004.log', log000004);
+    const r08 = r.errors.find((e) => e.location === 'r08')!;
+    expect(r08.measured_raw).toBe('1.5612M');
+    expect(r08.measured_value).toBeCloseTo(1_561_200);
+  });
+
+  it('high_limit_value and low_limit_value populated for analog error', () => {
+    const r = parseLog('PROD-001_SN-XXXX-000001.log', log000001);
+    const c01 = r.errors.find((e) => e.location === 'c01')!;
+    expect(c01.high_limit_value).not.toBeNull();
+    expect(c01.low_limit_value).not.toBeNull();
+  });
+
+  it('plain-numeric measured_value — r03 in SN-000003', () => {
+    const r = parseLog('PROD-001_SN-XXXX-000003.log', log000003);
+    const r03 = r.errors.find((e) => e.location === 'r03')!;
+    expect(r03.measured_raw).toBe('10.942');
+    expect(r03.measured_value).toBeCloseTo(10.942);
+  });
 });
 
 // ---------------------------------------------------------------------------

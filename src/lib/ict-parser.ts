@@ -24,18 +24,21 @@ export interface ParsedTest {
 }
 
 export interface ParsedError {
-  error_type:      'analog' | 'digital_pin' | 'shorts_report' | 'unknown';
-  location:        string;       // PCB component reference (was: component)
-  subtest:         string | null;
-  part_spec:       string;       // component value, e.g. "1UF" (was: component_value)
-  unit:            string;       // "FARADS" | "OHMS" | ""
-  measured_raw:    string;
-  nominal_raw:     string;
-  high_limit_raw:  string;
-  low_limit_raw:   string;
-  threshold_raw:   string | null;
-  threshold_value: number | null; // threshold_raw parsed to base-unit float
-  raw_block:       string | null; // raw lines that produced this error; null if not captured
+  error_type:       'analog' | 'digital_pin' | 'shorts_report' | 'unknown';
+  location:         string;       // PCB component reference (was: component)
+  subtest:          string | null;
+  part_spec:        string;       // component value, e.g. "1UF" (was: component_value)
+  unit:             string;       // "FARADS" | "OHMS" | ""
+  measured_raw:     string;
+  measured_value:   number | null; // measured_raw parsed to base-unit float
+  nominal_raw:      string;
+  high_limit_raw:   string;
+  high_limit_value: number | null; // high_limit_raw parsed to base-unit float
+  low_limit_raw:    string;
+  low_limit_value:  number | null; // low_limit_raw parsed to base-unit float
+  threshold_raw:    string | null;
+  threshold_value:  number | null; // threshold_raw parsed to base-unit float
+  raw_block:        string | null; // raw lines that produced this error; null if not captured
 }
 
 const SEPARATOR = '----------------------------------------';
@@ -54,21 +57,62 @@ export function parseTimestamp(ts: string): Date {
   return new Date(Date.UTC(year, month, day, hour, min, sec));
 }
 
+// SI suffix multipliers. Case-sensitive: lowercase 'm' = milli (1e-3),
+// uppercase 'M' = mega (1e6). A case-insensitive match misparses "1.0434M"
+// as 0.0010434, off by a factor of 1e9 — the most important correctness
+// rule in this parser.
+const SI_SUFFIX_MULTIPLIER: Record<string, number> = {
+  f: 1e-15,
+  p: 1e-12,
+  n: 1e-9,
+  u: 1e-6,
+  m: 1e-3,
+  k: 1e3,
+  K: 1e3,
+  M: 1e6,
+  g: 1e9,
+  G: 1e9,
+};
+
 /**
  * Convert a raw ICT value string with an optional SI suffix to a base-unit float.
- * Suffixes: p=1e-12, n=1e-9, u=1e-6, m=1e-3, k=1e3, M=1e6, G=1e9
- * Returns null when the input is null/empty or cannot be parsed.
+ *
+ * Accepts plain integers, decimals, scientific notation, and values with a
+ * trailing SI suffix (f, p, n, u, m, M, k, K, g, G, or "Meg"). Returns null
+ * for null/undefined/empty input, garbage like "0.-inf", "Part# 123", or
+ * anything that doesn't match the expected shape. Never throws; never
+ * returns NaN.
  */
-export function parseUnitValue(raw: string | null): number | null {
-  if (!raw) return null;
-  const m = raw.trim().match(/^([+-]?\d+(?:\.\d+)?)([pnumkMG]?)$/);
-  if (!m) return null;
-  const num = parseFloat(m[1]);
-  const suffixMap: Record<string, number> = {
-    p: 1e-12, n: 1e-9, u: 1e-6, m: 1e-3, k: 1e3, M: 1e6, G: 1e9,
-  };
-  const scale = m[2] ? (suffixMap[m[2]] ?? 1) : 1;
-  return num * scale;
+export function parseSiNumeric(raw: string | null | undefined): number | null {
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (trimmed === '') return null;
+
+  const numberPart = /[+-]?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?/.source;
+
+  // Plain numeric (including scientific notation).
+  if (new RegExp(`^${numberPart}$`).test(trimmed)) {
+    const n = parseFloat(trimmed);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // "Meg" suffix (case-sensitive, matched before single-char 'M').
+  const megMatch = trimmed.match(new RegExp(`^(${numberPart})Meg$`));
+  if (megMatch) {
+    const n = parseFloat(megMatch[1]);
+    return Number.isFinite(n) ? n * 1e6 : null;
+  }
+
+  // Single-character SI suffix (case-sensitive).
+  const siMatch = trimmed.match(new RegExp(`^(${numberPart})([fpnumMkKgG])$`));
+  if (siMatch) {
+    const n = parseFloat(siMatch[1]);
+    if (!Number.isFinite(n)) return null;
+    const scale = SI_SUFFIX_MULTIPLIER[siMatch[2]];
+    return scale === undefined ? null : n * scale;
+  }
+
+  return null;
 }
 
 /**
@@ -262,7 +306,10 @@ export function parseLog(filename: string, content: string): ParsedTest {
       // Capture the raw lines that produced this error record (from HAS FAILED up to j).
       const raw_block = lines.slice(blockStart, j).join('\n');
 
-      const threshold_value = parseUnitValue(threshold_raw);
+      const measured_value   = parseSiNumeric(measured_raw);
+      const high_limit_value = parseSiNumeric(high_limit_raw);
+      const low_limit_value  = parseSiNumeric(low_limit_raw);
+      const threshold_value  = parseSiNumeric(threshold_raw);
 
       // Deduplicate by location (keep first occurrence)
       if (!errorMap.has(location)) {
@@ -273,9 +320,12 @@ export function parseLog(filename: string, content: string): ParsedTest {
           part_spec,
           unit,
           measured_raw,
+          measured_value,
           nominal_raw,
           high_limit_raw,
+          high_limit_value,
           low_limit_raw,
+          low_limit_value,
           threshold_raw,
           threshold_value,
           raw_block,
